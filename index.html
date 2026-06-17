@@ -1,394 +1,93 @@
 <!DOCTYPE html>
 <html lang="th">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <meta name="theme-color" content="#020617" />
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <title>📚 คลังหนังสือ</title>
-
-  <style>
-    * { box-sizing: border-box; }
-    body { margin:0; font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif; background:#020617; color:#F1F5F9; transition: background 0.2s, color 0.2s; -webkit-tap-highlight-color: transparent; }
-    
-    .light { background:#F8FAFC !important; color:#0F172A !important; }
-    .light .modal-content { background:#ffffff !important; color:#0F172A !important; border-color: #CBD5E1 !important; }
-    .light input, .light textarea { background:#F1F5F9 !important; color:#0F172A !important; border-color: #CBD5E1 !important; }
-    .light input::placeholder, .light textarea::placeholder { color: #94A3B8 !important; }
-    
-    .modal { animation: modalPop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
-    @keyframes modalPop { 
-      from { opacity:0; transform:scale(0.9) translateY(20px); } 
-      to { opacity:1; transform:scale(1) translateY(0); } 
-    }
-    .genre-badge { padding:4px 10px; border-radius:999px; font-size:12px; font-weight:700; display: inline-block; }
-  </style>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>📚 คลังหนังสือ</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,sans-serif;background:#020617;color:#F1F5F9}
+h1{margin:0;font-size:24px}
+.header{padding:20px 16px;border-bottom:1px solid #1E293B}
+.search{width:100%;padding:12px;margin-top:12px;border-radius:10px;border:1px solid #334155;background:#1E293B;color:#fff;font-size:15px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:14px;padding:16px}
+.card{background:#0F172A;border:1px solid #1E293B;border-radius:14px;padding:14px;cursor:pointer;min-height:130px}
+.card-title{font-weight:700;font-size:14px;margin-bottom:4px}
+.badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;margin-top:6px}
+.add-card{border:2px dashed #475569;border-radius:14px;padding:14px;cursor:pointer;min-height:130px;display:flex;align-items:center;justify-content:center;flex-direction:column}
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;padding:16px;z-index:100}
+.modal{background:#0F172A;border:1px solid #334155;border-radius:20px;width:100%;max-width:440px;padding:24px;max-height:90vh;overflow-y:auto}
+input,textarea{width:100%;padding:11px;border-radius:10px;border:1px solid #334155;background:#1E293B;color:#fff;font-size:14px;margin-bottom:12px}
+.btn{padding:12px;border:none;border-radius:10px;cursor:pointer;font-size:14px;font-weight:600}
+.btn-primary{background:#6366F1;color:#fff;flex:1}
+.btn-cancel{background:#1E293B;color:#94A3B8;flex:1}
+.btn-delete{background:#7F1D1D;color:#FCA5A5;padding:12px 16px}
+.row{display:flex;gap:10px;margin-top:16px}
+label{font-size:12px;font-weight:600;display:block;margin-bottom:4px;opacity:0.8}
+</style>
 </head>
-<body id="body-root">
-  <div id="root"></div>
+<body>
+<div class="header">
+  <h1>📚 คลังหนังสือ</h1>
+  <input class="search" id="search" placeholder="🔍 ค้นหา..." oninput="render()"/>
+</div>
+<div class="grid" id="grid"></div>
 
-  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-  <script src="https://unpkg.com/babel-standalone/babel.min.js"></script>
+<div class="modal-bg" id="modal" style="display:none">
+  <div class="modal">
+    <h3 id="modal-title" style="margin:0 0 16px">เพิ่มหนังสือ</h3>
+    <input id="f-title" placeholder="ชื่อหนังสือ *"/>
+    <input id="f-author" placeholder="ผู้แต่ง"/>
+    <label>หมวดหมู่</label>
+    <select id="f-genre" style="width:100%;padding:11px;border-radius:10px;border:1px solid #334155;background:#1E293B;color:#fff;font-size:14px;margin-bottom:12px">
+      <option>แฟนตาซี</option><option>โรแมนซ์</option><option>ไลท์โนเวล</option>
+      <option>มังงะ</option><option>สยองขวัญ</option><option>นิยายวิทยาศาสตร์</option>
+      <option>สืบสวน</option><option>ประวัติศาสตร์</option><option>อื่นๆ</option>
+    </select>
+    <label>สถานะ</label>
+    <select id="f-status" style="width:100%;padding:11px;border-radius:10px;border:1px solid #334155;background:#1E293B;color:#fff;font-size:14px;margin-bottom:12px">
+      <option>ยังไม่ได้อ่าน</option><option>กำลังอ่าน</option><option>อ่านแล้ว</option><option>หยุดพัก</option>
+    </select>
+    <div style="display:flex;gap:10px">
+      <div style="flex:1"><label>เล่มทั้งหมด</label><input id="f-volumes" type="number" min="0" placeholder="ไม่ระบุ"/></div>
+      <div style="flex:1"><label>อ่านแล้ว</label><input id="f-read" type="number" min="0" placeholder="0"/></div>
+    </div>
+    <textarea id="f-notes" rows="3" placeholder="บันทึก..."></textarea>
+    <div class="row">
+      <button class="btn btn-cancel" onclick="closeModal()">ยกเลิก</button>
+      <button class="btn btn-delete" id="btn-del" style="display:none" onclick="deleteBook()">🗑️</button>
+      <button class="btn btn-primary" onclick="saveBook()">บันทึก</button>
+    </div>
+  </div>
+</div>
 
-  <script type="text/babel">
-    const { useState, useEffect, useMemo } = React;
-
-    const DB_NAME = "BookTrackerDB";
-    const STORE_NAME = "books";
-
-    function initDB() {
-      return new Promise((resolve, reject) => {
-        const request = indexedDB.open(DB_NAME, 2);
-        request.onupgradeneeded = e => {
-          const db = e.target.result;
-          if (!db.objectStoreNames.contains(STORE_NAME)) db.createObjectStore(STORE_NAME, { keyPath: "id" });
-        };
-        request.onsuccess = e => resolve(e.target.result);
-        request.onerror = e => reject(e.target.error);
-      });
-    }
-
-    async function getAllBooks() {
-      const db = await initDB();
-      return new Promise((resolve) => {
-        const tx = db.transaction(STORE_NAME, "readonly");
-        const request = tx.objectStore(STORE_NAME).getAll();
-        request.onsuccess = e => resolve(e.target.result || []);
-        request.onerror = () => resolve([]);
-      });
-    }
-
-    async function putBook(book) {
-      const db = await initDB();
-      return new Promise((resolve, reject) => {
-        const tx = db.transaction(STORE_NAME, "readwrite");
-        const request = tx.objectStore(STORE_NAME).put(book);
-        request.onsuccess = () => resolve();
-        request.onerror = e => reject(e.target.error);
-      });
-    }
-
-    async function deleteBookFromDB(id) {
-      const db = await initDB();
-      return new Promise((resolve, reject) => {
-        const tx = db.transaction(STORE_NAME, "readwrite");
-        const request = tx.objectStore(STORE_NAME).delete(id);
-        request.onsuccess = () => resolve();
-        request.onerror = e => reject(e.target.error);
-      });
-    }
-
-    const GENRES = [
-      { label:"แฟนตาซี", color:"#7C3AED" }, { label:"โรแมนซ์", color:"#DB2777" },
-      { label:"ไลท์โนเวล", color:"#0284C7" }, { label:"มังงะ", color:"#D97706" },
-      { label:"สยองขวัญ", color:"#DC2626" }, { label:"นิยายวิทยาศาสตร์", color:"#059669" },
-      { label:"สืบสวน", color:"#7C3AED" }, { label:"ประวัติศาสตร์", color:"#92400E" },
-      { label:"อื่นๆ", color:"#475569" }
-    ];
-
-    const STATUS_CONFIG = {
-      "กำลังอ่าน": { color:"#22C55E", icon:"📖" },
-      "อ่านแล้ว":  { color:"#6366F1", icon:"✅" },
-      "ยังไม่ได้อ่าน": { color:"#94A3B8", icon:"🔖" },
-      "หยุดพัก":   { color:"#F59E0B", icon:"⏸️" }
-    };
-
-    // ==================== MODALS ====================
-    function BookFormModal({ book, onSave, onClose, onDelete }) {
-      const isEdit = !!book?.id;
-      const [form, setForm] = useState(book || {
-        title: "", author: "", genre: "แฟนตาซี", status: "ยังไม่ได้อ่าน",
-        volumes: "", readVolumes: "", notes: ""
-      });
-
-      const handleSave = () => {
-        if (!form.title.trim()) return alert("กรุณากรอกชื่อหนังสือ");
-        
-        // [BUG FIX #1] แก้การ parse ตัวเลข: ใช้ Number() แทน parseInt เพื่อรองรับ ""
-        // และตรวจสอบ NaN ด้วย isNaN ให้ชัดเจน
-        const parseVol = (val) => {
-          if (val === "" || val === null || val === undefined) return "";
-          const n = Math.abs(parseInt(val, 10));
-          return isNaN(n) ? "" : n;
-        };
-
-        let vols = parseVol(form.volumes);
-        let readVols = parseVol(form.readVolumes);
-        
-        // ตรรกะป้องกัน: readVols เกิน vols ให้ปรับให้เท่ากัน
-        // [BUG FIX #1 ต่อ] เดิม readVols อาจเป็น "" (string) แล้วเทียบ > number ได้ผลผิด
-        if (vols !== "" && readVols !== "" && readVols > vols) {
-          readVols = vols;
-        }
-
-        const cleanForm = {
-          ...form,
-          title: form.title.trim(),
-          author: form.author.trim(),
-          volumes: vols,
-          readVolumes: readVols
-        };
-        
-        onSave(cleanForm);
-        onClose();
-      };
-
-      return (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:1500,display:"flex",alignItems:"center",justifyContent:"center",padding:16, backdropFilter:"blur(8px)"}}>
-          <div className="modal modal-content" style={{background:"#0F172A",borderRadius:20,width:"100%",maxWidth:440,padding:24,maxHeight:"90vh",overflowY:"auto",border:"1px solid #334155", boxShadow:"0 20px 25px -5px rgba(0,0,0,0.5)"}}>
-            <h3 style={{margin:0,marginBottom:20, fontSize:20}}>{isEdit ? "✏️ แก้ไขข้อมูลหนังสือ" : "📗 เพิ่มหนังสือใหม่"}</h3>
-            
-            <label style={{fontSize:13, fontWeight:600, display:"block", marginBottom:4}}>ชื่อหนังสือ *</label>
-            <input value={form.title} onChange={e => setForm({...form, title:e.target.value})} placeholder="กรอกชื่อหนังสือ" style={{width:"100%",padding:12,marginBottom:14,borderRadius:10,background:"#1E293B",border:"1px solid #334155",color:"#fff",fontSize:15}} />
-            
-            <label style={{fontSize:13, fontWeight:600, display:"block", marginBottom:4}}>ผู้แต่ง / นักเขียน</label>
-            <input value={form.author} onChange={e => setForm({...form, author:e.target.value})} placeholder="ชื่อผู้แต่ง (ถ้ามี)" style={{width:"100%",padding:12,marginBottom:14,borderRadius:10,background:"#1E293B",border:"1px solid #334155",color:"#fff",fontSize:15}} />
-            
-            <div style={{marginBottom:14}}>
-              <div style={{marginBottom:8, fontSize:13, fontWeight:600}}>หมวดหมู่ / แนวหนังสือ</div>
-              <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-                {GENRES.map(g => (
-                  <button key={g.label} type="button" onClick={() => setForm({...form, genre:g.label})} 
-                    style={{padding:"6px 12px",borderRadius:999,border:"2px solid",cursor:"pointer",fontSize:13,fontWeight:600,borderColor:form.genre===g.label?g.color:"#334155",background:form.genre===g.label?g.color+"22":"transparent",color:form.genre===g.label?g.color:"#94A3B8"}}>
-                    {g.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div style={{marginBottom:14}}>
-              <div style={{marginBottom:8, fontSize:13, fontWeight:600}}>สถานะการอ่าน</div>
-              <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-                {Object.entries(STATUS_CONFIG).map(([s, cfg]) => (
-                  <button key={s} type="button" onClick={() => setForm({...form, status:s})} 
-                    style={{padding:"6px 12px",borderRadius:999,border:"2px solid",cursor:"pointer",fontSize:13,fontWeight:600,borderColor:form.status===s?cfg.color:"#334155",background:form.status===s?cfg.color+"22":"transparent",color:form.status===s?cfg.color:"#94A3B8"}}>
-                    {cfg.icon} {s}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div style={{display:"flex", gap:12, marginBottom:14}}>
-              <div style={{flex:1}}>
-                <label style={{fontSize:12, fontWeight:600, opacity:0.8}}>จำนวนเล่มทั้งหมด</label>
-                <input type="number" min="0" value={form.volumes} onChange={e => setForm({...form, volumes:e.target.value})} placeholder="ไม่ระบุ" style={{width:"100%",padding:12,marginTop:4,borderRadius:10,background:"#1E293B",border:"1px solid #334155",color:"#fff",fontSize:15}} />
-              </div>
-              <div style={{flex:1}}>
-                <label style={{fontSize:12, fontWeight:600, opacity:0.8}}>อ่านไปแล้ว (เล่ม)</label>
-                <input type="number" min="0" value={form.readVolumes} onChange={e => setForm({...form, readVolumes:e.target.value})} placeholder="0" style={{width:"100%",padding:12,marginTop:4,borderRadius:10,background:"#1E293B",border:"1px solid #334155",color:"#fff",fontSize:15}} />
-              </div>
-            </div>
-
-            <label style={{fontSize:12, fontWeight:600, display:"block", marginBottom:4}}>บันทึกเพิ่มเติม</label>
-            <textarea value={form.notes} onChange={e => setForm({...form, notes:e.target.value})} placeholder="เขียนรีวิวสั้นๆ หรือโน้ตเล่มที่กำลังอ่านอยู่..." rows="3" style={{width:"100%",padding:12,borderRadius:10,background:"#1E293B",border:"1px solid #334155",color:"#fff",resize:"none",fontSize:15}} />
-
-            <div style={{display:"flex",gap:10,marginTop:20}}>
-              <button type="button" onClick={onClose} style={{flex:1,padding:14,background:"#1E293B",border:"none",borderRadius:12,color:"#94A3B8",cursor:"pointer",fontWeight:600,fontSize:15}}>ยกเลิก</button>
-              {isEdit && <button type="button" onClick={() => {onDelete(book.id); onClose();}} style={{padding:14,background:"#7F1D1D",border:"none",borderRadius:12,color:"#FCA5A5",cursor:"pointer",fontSize:15}}>🗑️ ลบ</button>}
-              <button type="button" onClick={handleSave} style={{flex:1,padding:14,background:"#6366F1",border:"none",borderRadius:12,color:"#fff",fontWeight:700,cursor:"pointer",fontSize:15}}>บันทึก</button>
-            </div>
-          </div>
-        </div>
-      );
-    }
-
-    function BookDetailModal({ book, onEdit, onClose }) {
-      const progress = book.volumes ? Math.min(Math.round((book.readVolumes || 0) / book.volumes * 100), 100) : 0;
-      const statusCfg = STATUS_CONFIG[book.status] || STATUS_CONFIG["ยังไม่ได้อ่าน"];
-
-      return (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:1400,display:"flex",alignItems:"center",justifyContent:"center",padding:16, backdropFilter:"blur(8px)"}}>
-          <div className="modal modal-content" style={{background:"#0F172A",borderRadius:20,width:"100%",maxWidth:440,padding:24,border:"1px solid #334155", boxShadow:"0 20px 25px -5px rgba(0,0,0,0.5)"}}>
-            <h2 style={{margin:0,marginBottom:6, fontSize:22, wordBreak:"break-word"}}>{book.title}</h2>
-            {book.author && <p style={{margin:"4px 0", opacity:0.7, fontSize:14}}>✍️ ผู้แต่ง: {book.author}</p>}
-            
-            <div style={{margin:"16px 0", display:"flex", flexWrap:"wrap", gap:8}}>
-              <span className="genre-badge" style={{background:GENRES.find(g=>g.label===book.genre)?.color+"22", color:GENRES.find(g=>g.label===book.genre)?.color}}>
-                {book.genre}
-              </span>
-              <span className="genre-badge" style={{background:statusCfg.color+"22", color:statusCfg.color}}>
-                {statusCfg.icon} {book.status}
-              </span>
-            </div>
-
-            {book.volumes ? (
-              <div style={{margin:"16px 0"}}>
-                <div style={{display:"flex", justifyContent:"space-between", fontSize:13, marginBottom:6, fontWeight:500}}>
-                  <span>ความคืบหน้า ({book.readVolumes || 0} / {book.volumes} เล่ม)</span>
-                  <span>{progress}%</span>
-                </div>
-                <div style={{height:10,background:"#1E293B",borderRadius:999,overflow:"hidden"}}>
-                  <div style={{width:`${progress}%`,height:"100%",background:statusCfg.color,borderRadius:999, transition:"width 0.4s ease"}}></div>
-                </div>
-              </div>
-            ) : null}
-
-            {book.notes && (
-              <div style={{background:"#1E293B",padding:14,borderRadius:12,marginTop:16, fontSize:14, whiteSpace:"pre-wrap", border:"1px solid #334155"}}>
-                💡 <b>บันทึกเพิ่มเติม:</b><br/><span style={{opacity:0.9}}>{book.notes}</span>
-              </div>
-            )}
-
-            <div style={{display:"flex",gap:10,marginTop:24}}>
-              <button onClick={onEdit} style={{flex:1,padding:14,background:"#6366F1",border:"none",borderRadius:12,color:"#fff",fontWeight:600,cursor:"pointer",fontSize:15}}>✏️ แก้ไข</button>
-              <button onClick={onClose} style={{flex:1,padding:14,background:"#1E293B",border:"none",borderRadius:12,color:"#94A3B8",cursor:"pointer",fontSize:15}}>ปิด</button>
-            </div>
-          </div>
-        </div>
-      );
-    }
-
-    function BookCard({ book, onClick, isLight }) {
-      const progress = book.volumes ? Math.min(Math.round((book.readVolumes || 0) / book.volumes * 100), 100) : null;
-      return (
-        <div onClick={onClick} style={{background: isLight ? "#ffffff" : "#0F172A", borderRadius:14, padding:14, cursor:"pointer", border:"1px solid", borderColor: isLight ? "#E2E8F0" : "#1E293B", display:"flex", flexDirection:"column", justifyContent:"space-between", height:"100%", minHeight:140, boxShadow:"0 2px 5px rgba(0,0,0,0.05)"}}>
-          <div>
-            <div style={{fontWeight:700,marginBottom:4, fontSize:15, lineBreak:"anywhere", display:"-webkit-box", WebkitLineClamp:2, WebkitBoxOrient:"vertical", overflow:"hidden"}}>{book.title}</div>
-            {book.author && <div style={{fontSize:12,opacity:0.6,marginBottom:10, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>✍️ {book.author}</div>}
-          </div>
-          <div>
-            <span className="genre-badge" style={{background:GENRES.find(g=>g.label===book.genre)?.color+"15", color:GENRES.find(g=>g.label===book.genre)?.color, fontSize:11, padding:"2px 8px"}}>
-              {book.genre}
-            </span>
-            {progress !== null && (
-              <div style={{marginTop:8,fontSize:11, opacity:0.8, fontWeight:500}}>
-                📖 อ่านแล้ว {progress}%
-              </div>
-            )}
-          </div>
-        </div>
-      );
-    }
-
-    // ==================== MAIN APP ====================
-    function App() {
-      const [books, setBooks] = useState([]);
-      const [selected, setSelected] = useState(null);
-      const [editBook, setEditBook] = useState(null);
-      const [showAdd, setShowAdd] = useState(false);
-      const [searchTerm, setSearchTerm] = useState("");
-      const [isLight, setIsLight] = useState(false);
-
-      useEffect(() => {
-        getAllBooks().then(data => setBooks(data));
-      }, []);
-
-      useEffect(() => {
-        const body = document.getElementById("body-root");
-        if (isLight) body.classList.add("light");
-        else body.classList.remove("light");
-      }, [isLight]);
-
-      const handleSaveBook = async (newBook) => {
-        let updatedBook = { ...newBook };
-        if (!updatedBook.id) {
-          updatedBook.id = Date.now();
-        }
-        
-        try {
-          await putBook(updatedBook);
-          setBooks(prev => {
-            const exists = prev.some(b => b.id === updatedBook.id);
-            if (exists) return prev.map(b => b.id === updatedBook.id ? updatedBook : b);
-            return [...prev, updatedBook];
-          });
-
-          // [BUG FIX #2] sync selected หลัง save: ถ้า selected อยู่และเป็นเล่มเดิม ให้ update ด้วย
-          setSelected(prev => prev?.id === updatedBook.id ? updatedBook : prev);
-        } catch (err) {
-          alert("เกิดข้อผิดพลาดในการบันทึกข้อมูล");
-        }
-      };
-
-      const handleDelete = async (id) => {
-        // [BUG FIX #3] ใช้ window.confirm แทน confirm เพื่อชัดเจน ไม่ conflict กับ Babel
-        if (window.confirm("ลบหนังสือเล่มนี้ออกจากคลังอย่างถาวร?")) {
-          try {
-            await deleteBookFromDB(id);
-            setBooks(prev => prev.filter(b => b.id !== id));
-            setSelected(null);   // clear เสมอหลังลบ ไม่ต้องเช็ค id แล้ว
-            setEditBook(null);   // [BUG FIX #3] ล้าง editBook ด้วย เดิมไม่มีบรรทัดนี้
-          } catch (err) {
-            alert("ไม่สามารถลบข้อมูลได้");
-          }
-        }
-      };
-
-      // [BUG FIX #4] handleCloseEdit: เมื่อปิด edit modal ให้กลับไปโชว์ detail modal ของ selected เดิม
-      // เดิม: setEditBook(null) แล้ว selected ยังอยู่ = detail modal โผล่ขึ้นมาถูก (logic เดิมถูก)
-      // แต่ถ้า edit แล้ว save -> selected เก่าไม่ sync -> แก้ด้วย BUG FIX #2 แล้ว
-      // เพิ่ม: ถ้าปิด edit โดยไม่ได้ save -> ให้ selected กลับเป็น editBook เดิม (ในกรณีที่ selected ถูก clear)
-      const handleCloseEdit = () => {
-        // ถ้า selected หายไป (เช่นถูก clear จากบัค) ให้ restore จาก editBook
-        if (!selected && editBook) setSelected(editBook);
-        setEditBook(null);
-      };
-
-      const filteredBooks = useMemo(() => {
-        return books.filter(book => 
-          (book.title || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-          (book.author || "").toLowerCase().includes(searchTerm.toLowerCase())
-        );
-      }, [books, searchTerm]);
-
-      return (
-        <div style={{minHeight:"100vh", paddingBottom:40}}>
-          {/* Header */}
-          <div style={{padding:"24px 16px", background: isLight ? "#F1F5F9" : "#0F172A", borderBottom:"1px solid", borderColor: isLight ? "#E2E8F0" : "#1E293B"}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center", maxWidth:800, margin:"0 auto"}}>
-              <h1 style={{margin:0, fontSize:26, fontWeight:800}}>📚 คลังหนังสือ</h1>
-              <button onClick={() => setIsLight(!isLight)} style={{fontSize:24,background:"none",border:"none", cursor:"pointer", padding:4}} title={isLight ? "โหมดกลางคืน" : "โหมดสว่าง"}>
-                {isLight ? "🌙" : "☀️"}
-              </button>
-            </div>
-            <div style={{maxWidth:800, margin:"16px auto 0 auto"}}>
-              <input 
-                value={searchTerm} 
-                onChange={e => setSearchTerm(e.target.value)} 
-                placeholder="🔍 ค้นหาชื่อหนังสือหรือชื่อผู้แต่ง..." 
-                style={{width:"100%",padding:14,borderRadius:12,border:"1px solid",borderColor: isLight ? "#CBD5E1" : "#334155",background:isLight?"#fff":"#1E293B",color:isLight?"#0F172A":"#fff", fontSize:15}}
-              />
-            </div>
-          </div>
-
-          {/* Book Grid */}
-          <div style={{padding:"20px 16px", display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(140px, 1fr))", gap:16, maxWidth:800, margin:"0 auto"}}>
-            <div onClick={() => setShowAdd(true)} style={{border:"2px dashed", borderColor: isLight ? "#94A3B8" : "#475569", borderRadius:16, padding:20, textAlign:"center", cursor:"pointer", minHeight:140, display:"flex", alignItems:"center", justifyContent:"center", flexDirection:"column", background: isLight ? "#F8FAFC" : "transparent"}}>
-              <div style={{fontSize:32, color:"#6366F1", fontWeight:"bold", marginBottom:4}}>+</div>
-              <div style={{fontSize:13, fontWeight:600, opacity:0.8}}>เพิ่มหนังสือ</div>
-            </div>
-
-            {filteredBooks.map(book => (
-              <BookCard key={book.id} book={book} isLight={isLight} onClick={() => setSelected(book)} />
-            ))}
-          </div>
-
-          {/* Modals */}
-          {showAdd && <BookFormModal onSave={handleSaveBook} onClose={() => setShowAdd(false)} />}
-          {selected && !editBook && (
-            <BookDetailModal 
-              book={selected} 
-              onClose={() => setSelected(null)} 
-              onEdit={() => { setEditBook(selected); }} 
-            />
-          )}
-          {editBook && (
-            <BookFormModal 
-              book={editBook} 
-              onSave={handleSaveBook} 
-              onClose={handleCloseEdit}       // [BUG FIX #4] ใช้ handleCloseEdit แทน setEditBook(null) โดยตรง
-              onDelete={handleDelete} 
-            />
-          )}
-        </div>
-      );
-    }
-
-    const container = document.getElementById('root');
-    const root = ReactDOM.createRoot(container);
-    root.render(React.createElement(App));
-  </script>
+<script>
+const COLORS={แฟนตาซี:"#7C3AED",โรแมนซ์:"#DB2777",ไลท์โนเวล:"#0284C7",มังงะ:"#D97706",สยองขวัญ:"#DC2626",นิยายวิทยาศาสตร์:"#059669",สืบสวน:"#7C3AED",ประวัติศาสตร์:"#92400E","อื่นๆ":"#475569"};
+const SCOLOR={กำลังอ่าน:"#22C55E",อ่านแล้ว:"#6366F1","ยังไม่ได้อ่าน":"#94A3B8",หยุดพัก:"#F59E0B"};
+let books=JSON.parse(localStorage.getItem("books")||"[]"),editId=null;
+function save(){localStorage.setItem("books",JSON.stringify(books))}
+function render(){
+  const q=document.getElementById("search").value.toLowerCase();
+  const filtered=books.filter(b=>(b.title+b.author).toLowerCase().includes(q));
+  const g=document.getElementById("grid");
+  g.innerHTML=`<div class="add-card" onclick="openAdd()"><div style="font-size:28px;color:#6366F1">+</div><div style="font-size:13px;margin-top:4px">เพิ่มหนังสือ</div></div>`;
+  filtered.forEach(b=>{
+    const c=COLORS[b.genre]||"#475569",s=SCOLOR[b.status]||"#94A3B8";
+    const p=b.volumes?Math.min(Math.round((b.readVolumes||0)/b.volumes*100),100):null;
+    g.innerHTML+=`<div class="card" onclick="openEdit(${b.id})">
+      <div class="card-title">${b.title}</div>
+      ${b.author?`<div style="font-size:11px;opacity:0.6">✍️ ${b.author}</div>`:""}
+      <span class="badge" style="background:${c}22;color:${c}">${b.genre}</span>
+      ${p!==null?`<div style="font-size:11px;margin-top:6px;opacity:0.8">📖 ${p}%</div>`:""}
+    </div>`;
+  });
+}
+function openAdd(){editId=null;document.getElementById("modal-title").textContent="📗 เพิ่มหนังสือ";document.getElementById("f-title").value="";document.getElementById("f-author").value="";document.getElementById("f-genre").value="แฟนตาซี";document.getElementById("f-status").value="ยังไม่ได้อ่าน";document.getElementById("f-volumes").value="";document.getElementById("f-read").value="";document.getElementById("f-notes").value="";document.getElementById("btn-del").style.display="none";document.getElementById("modal").style.display="flex"}
+function openEdit(id){editId=id;const b=books.find(x=>x.id===id);if(!b)return;document.getElementById("modal-title").textContent="✏️ แก้ไข";document.getElementById("f-title").value=b.title;document.getElementById("f-author").value=b.author||"";document.getElementById("f-genre").value=b.genre;document.getElementById("f-status").value=b.status;document.getElementById("f-volumes").value=b.volumes||"";document.getElementById("f-read").value=b.readVolumes||"";document.getElementById("f-notes").value=b.notes||"";document.getElementById("btn-del").style.display="block";document.getElementById("modal").style.display="flex"}
+function closeModal(){document.getElementById("modal").style.display="none"}
+function saveBook(){const t=document.getElementById("f-title").value.trim();if(!t)return alert("กรุณากรอกชื่อหนังสือ");const v=parseInt(document.getElementById("f-volumes").value)||"";const r=parseInt(document.getElementById("f-read").value)||0;const book={id:editId||Date.now(),title:t,author:document.getElementById("f-author").value.trim(),genre:document.getElementById("f-genre").value,status:document.getElementById("f-status").value,volumes:v,readVolumes:r,notes:document.getElementById("f-notes").value};if(editId){books=books.map(b=>b.id===editId?book:b)}else{books.push(book)}save();closeModal();render()}
+function deleteBook(){if(confirm("ลบหนังสือเล่มนี้?")){{books=books.filter(b=>b.id!==editId);save();closeModal();render()}}}
+render();
+</script>
 </body>
 </html>
-
