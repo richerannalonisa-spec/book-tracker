@@ -1,93 +1,338 @@
 <!DOCTYPE html>
 <html lang="th">
 <head>
-<meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>📚 คลังหนังสือ</title>
-<style>
-*{box-sizing:border-box}
-body{margin:0;font-family:system-ui,sans-serif;background:#020617;color:#F1F5F9}
-h1{margin:0;font-size:24px}
-.header{padding:20px 16px;border-bottom:1px solid #1E293B}
-.search{width:100%;padding:12px;margin-top:12px;border-radius:10px;border:1px solid #334155;background:#1E293B;color:#fff;font-size:15px}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:14px;padding:16px}
-.card{background:#0F172A;border:1px solid #1E293B;border-radius:14px;padding:14px;cursor:pointer;min-height:130px}
-.card-title{font-weight:700;font-size:14px;margin-bottom:4px}
-.badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;margin-top:6px}
-.add-card{border:2px dashed #475569;border-radius:14px;padding:14px;cursor:pointer;min-height:130px;display:flex;align-items:center;justify-content:center;flex-direction:column}
-.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;padding:16px;z-index:100}
-.modal{background:#0F172A;border:1px solid #334155;border-radius:20px;width:100%;max-width:440px;padding:24px;max-height:90vh;overflow-y:auto}
-input,textarea{width:100%;padding:11px;border-radius:10px;border:1px solid #334155;background:#1E293B;color:#fff;font-size:14px;margin-bottom:12px}
-.btn{padding:12px;border:none;border-radius:10px;cursor:pointer;font-size:14px;font-weight:600}
-.btn-primary{background:#6366F1;color:#fff;flex:1}
-.btn-cancel{background:#1E293B;color:#94A3B8;flex:1}
-.btn-delete{background:#7F1D1D;color:#FCA5A5;padding:12px 16px}
-.row{display:flex;gap:10px;margin-top:16px}
-label{font-size:12px;font-weight:600;display:block;margin-bottom:4px;opacity:0.8}
-</style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#020617" />
+  <title>🎬 BOOKFLIX - คลังหนังสือ</title>
+  <style>
+    body { margin:0; font-family: system-ui, sans-serif; background:#020617; color:#F1F5F9; overflow-x: hidden; }
+    .netflix-row { display: flex; gap: 16px; padding: 0 16px 20px; overflow-x: auto; scroll-behavior: smooth; -webkit-overflow-scrolling: touch; }
+    .netflix-row::-webkit-scrollbar { display: none; }
+    
+    /* การ์ดสไตล์ Netflix */
+    .book-card { 
+      flex: 0 0 145px; width: 145px; cursor: pointer; background: #0F172A; 
+      border-radius: 8px; border: 1px solid #1E2937; text-align: center; 
+      padding: 0 0 10px 0; position: relative; transition: transform 0.3s ease, box-shadow 0.3s ease; 
+      overflow: hidden; display: flex; flex-direction: column;
+    }
+    .book-card:hover { transform: scale(1.05); box-shadow: 0 10px 20px rgba(229, 9, 20, 0.2); z-index: 10; }
+    
+    /* พื้นที่แสดงรูปภาพบนหน้าบัตร */
+    .cover-container { width: 100%; height: 160px; background: #1E2937; display: flex; position: relative; overflow: hidden; align-items: center; justify-content: center; }
+    .single-cover { width: 100%; height: 100%; object-fit: cover; }
+    .split-cover { width: 50%; height: 100%; object-fit: cover; }
+    .split-divider { width: 2px; height: 100%; background: #020617; position: absolute; left: 50%; transform: translateX(-50%); z-index: 2; }
+    
+    .card-info { padding: 8px 8px 0 8px; flex-grow: 1; }
+    .progress-container { width: calc(100% - 16px); height: 4px; background: #334155; border-radius: 2px; margin: 8px auto 0 auto; overflow: hidden; }
+    .progress-bar { height: 100%; background: #E50914; width: 0%; transition: width 0.3s ease; }
+    .row-title { font-size: 18px; font-weight: 800; padding: 24px 16px 12px; color: #fff; }
+    
+    .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 1000; display: flex; alignItems: center; justify-content: center; padding: 16px; overflow-y: auto; }
+    .modal { background: #0F172A; padding: 24px; border-radius: 12px; width: 100%; max-width: 420px; border: 1px solid #334155; max-height: 90vh; overflow-y: auto; }
+    input, select, textarea { width: 100%; padding: 11px; background: #1E2937; border: 1px solid #334155; border-radius: 8px; color: #fff; margin-top: 4px; margin-bottom: 14px; box-sizing: border-box; font-family: inherit; font-size: 14px; }
+    
+    .file-input-label { display: block; padding: 10px; background: #334155; text-align: center; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 600; margin-bottom: 12px; }
+    .file-input-label:hover { background: #475569; }
+    .preview-box { display: flex; gap: 8px; margin-bottom: 14px; height: 80px; }
+    .preview-img { width: 60px; height: 100%; object-fit: cover; border-radius: 4px; border: 1px solid #334155; }
+  </style>
 </head>
 <body>
-<div class="header">
-  <h1>📚 คลังหนังสือ</h1>
-  <input class="search" id="search" placeholder="🔍 ค้นหา..." oninput="render()"/>
-</div>
-<div class="grid" id="grid"></div>
+  <div id="root"></div>
 
-<div class="modal-bg" id="modal" style="display:none">
-  <div class="modal">
-    <h3 id="modal-title" style="margin:0 0 16px">เพิ่มหนังสือ</h3>
-    <input id="f-title" placeholder="ชื่อหนังสือ *"/>
-    <input id="f-author" placeholder="ผู้แต่ง"/>
-    <label>หมวดหมู่</label>
-    <select id="f-genre" style="width:100%;padding:11px;border-radius:10px;border:1px solid #334155;background:#1E293B;color:#fff;font-size:14px;margin-bottom:12px">
-      <option>แฟนตาซี</option><option>โรแมนซ์</option><option>ไลท์โนเวล</option>
-      <option>มังงะ</option><option>สยองขวัญ</option><option>นิยายวิทยาศาสตร์</option>
-      <option>สืบสวน</option><option>ประวัติศาสตร์</option><option>อื่นๆ</option>
-    </select>
-    <label>สถานะ</label>
-    <select id="f-status" style="width:100%;padding:11px;border-radius:10px;border:1px solid #334155;background:#1E293B;color:#fff;font-size:14px;margin-bottom:12px">
-      <option>ยังไม่ได้อ่าน</option><option>กำลังอ่าน</option><option>อ่านแล้ว</option><option>หยุดพัก</option>
-    </select>
-    <div style="display:flex;gap:10px">
-      <div style="flex:1"><label>เล่มทั้งหมด</label><input id="f-volumes" type="number" min="0" placeholder="ไม่ระบุ"/></div>
-      <div style="flex:1"><label>อ่านแล้ว</label><input id="f-read" type="number" min="0" placeholder="0"/></div>
-    </div>
-    <textarea id="f-notes" rows="3" placeholder="บันทึก..."></textarea>
-    <div class="row">
-      <button class="btn btn-cancel" onclick="closeModal()">ยกเลิก</button>
-      <button class="btn btn-delete" id="btn-del" style="display:none" onclick="deleteBook()">🗑️</button>
-      <button class="btn btn-primary" onclick="saveBook()">บันทึก</button>
-    </div>
-  </div>
-</div>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 
-<script>
-const COLORS={แฟนตาซี:"#7C3AED",โรแมนซ์:"#DB2777",ไลท์โนเวล:"#0284C7",มังงะ:"#D97706",สยองขวัญ:"#DC2626",นิยายวิทยาศาสตร์:"#059669",สืบสวน:"#7C3AED",ประวัติศาสตร์:"#92400E","อื่นๆ":"#475569"};
-const SCOLOR={กำลังอ่าน:"#22C55E",อ่านแล้ว:"#6366F1","ยังไม่ได้อ่าน":"#94A3B8",หยุดพัก:"#F59E0B"};
-let books=JSON.parse(localStorage.getItem("books")||"[]"),editId=null;
-function save(){localStorage.setItem("books",JSON.stringify(books))}
-function render(){
-  const q=document.getElementById("search").value.toLowerCase();
-  const filtered=books.filter(b=>(b.title+b.author).toLowerCase().includes(q));
-  const g=document.getElementById("grid");
-  g.innerHTML=`<div class="add-card" onclick="openAdd()"><div style="font-size:28px;color:#6366F1">+</div><div style="font-size:13px;margin-top:4px">เพิ่มหนังสือ</div></div>`;
-  filtered.forEach(b=>{
-    const c=COLORS[b.genre]||"#475569",s=SCOLOR[b.status]||"#94A3B8";
-    const p=b.volumes?Math.min(Math.round((b.readVolumes||0)/b.volumes*100),100):null;
-    g.innerHTML+=`<div class="card" onclick="openEdit(${b.id})">
-      <div class="card-title">${b.title}</div>
-      ${b.author?`<div style="font-size:11px;opacity:0.6">✍️ ${b.author}</div>`:""}
-      <span class="badge" style="background:${c}22;color:${c}">${b.genre}</span>
-      ${p!==null?`<div style="font-size:11px;margin-top:6px;opacity:0.8">📖 ${p}%</div>`:""}
-    </div>`;
-  });
-}
-function openAdd(){editId=null;document.getElementById("modal-title").textContent="📗 เพิ่มหนังสือ";document.getElementById("f-title").value="";document.getElementById("f-author").value="";document.getElementById("f-genre").value="แฟนตาซี";document.getElementById("f-status").value="ยังไม่ได้อ่าน";document.getElementById("f-volumes").value="";document.getElementById("f-read").value="";document.getElementById("f-notes").value="";document.getElementById("btn-del").style.display="none";document.getElementById("modal").style.display="flex"}
-function openEdit(id){editId=id;const b=books.find(x=>x.id===id);if(!b)return;document.getElementById("modal-title").textContent="✏️ แก้ไข";document.getElementById("f-title").value=b.title;document.getElementById("f-author").value=b.author||"";document.getElementById("f-genre").value=b.genre;document.getElementById("f-status").value=b.status;document.getElementById("f-volumes").value=b.volumes||"";document.getElementById("f-read").value=b.readVolumes||"";document.getElementById("f-notes").value=b.notes||"";document.getElementById("btn-del").style.display="block";document.getElementById("modal").style.display="flex"}
-function closeModal(){document.getElementById("modal").style.display="none"}
-function saveBook(){const t=document.getElementById("f-title").value.trim();if(!t)return alert("กรุณากรอกชื่อหนังสือ");const v=parseInt(document.getElementById("f-volumes").value)||"";const r=parseInt(document.getElementById("f-read").value)||0;const book={id:editId||Date.now(),title:t,author:document.getElementById("f-author").value.trim(),genre:document.getElementById("f-genre").value,status:document.getElementById("f-status").value,volumes:v,readVolumes:r,notes:document.getElementById("f-notes").value};if(editId){books=books.map(b=>b.id===editId?book:b)}else{books.push(book)}save();closeModal();render()}
-function deleteBook(){if(confirm("ลบหนังสือเล่มนี้?")){{books=books.filter(b=>b.id!==editId);save();closeModal();render()}}}
-render();
-</script>
+  <script>
+    const { useState, useEffect } = React;
+
+    let dbInstance = null;
+    const DB_NAME = "BookTrackerDB";
+    const STORE_NAME = "books";
+
+    async function initDB() {
+      return new Promise((resolve, reject) => {
+        if (dbInstance) return resolve(dbInstance);
+        const request = indexedDB.open(DB_NAME, 3); // ขยับเวอร์ชันเพื่อรองรับฟังก์ชันรูปภาพใหม่
+        request.onupgradeneeded = e => {
+          const db = e.target.result;
+          if (!db.objectStoreNames.contains(STORE_NAME)) {
+            db.createObjectStore(STORE_NAME, { keyPath: "id" });
+          }
+        };
+        request.onsuccess = e => { dbInstance = e.target.result; resolve(dbInstance); };
+        request.onerror = e => reject(e.target.error);
+      });
+    }
+
+    async function getAllBooks() {
+      const db = await initDB();
+      return new Promise(resolve => {
+        const tx = db.transaction(STORE_NAME, "readonly");
+        const req = tx.objectStore(STORE_NAME).getAll();
+        req.onsuccess = () => resolve(req.result || []);
+      });
+    }
+
+    async function saveAllBooks(books) {
+      const db = await initDB();
+      const tx = db.transaction(STORE_NAME, "readwrite");
+      const store = tx.objectStore(STORE_NAME);
+      store.clear();
+      books.forEach(book => store.put(book));
+    }
+
+    function App() {
+      const [books, setBooks] = useState([]);
+      const [selected, setSelected] = useState(null);
+      const [showAdd, setShowAdd] = useState(false);
+      const [isSyncing, setIsSyncing] = useState(false);
+      const [hasLoaded, setHasLoaded] = useState(false);
+
+      // ฟิลด์ข้อมูลของบัตรหนังสือ
+      const [titleInput, setTitleInput] = useState("");
+      const [authorInput, setAuthorInput] = useState("");
+      const [statusInput, setStatusInput] = useState("กำลังอ่าน");
+      const [totalPages, setTotalPages] = useState("");
+      const [currentPage, setCurrentPage] = useState("");
+      
+      // ระบบเลือกรูปแบบรูปภาพปกบัตร
+      const [imgType, setImgType] = useState("single"); // single หรือ split
+      const [imgData1, setImgData1] = useState(""); // ภาพหลัก หรือ ภาพฝั่งซ้าย
+      const [imgData2, setImgData2] = useState(""); // ภาพฝั่งขวา (กรณีแบ่งครึ่ง)
+
+      useEffect(() => {
+        getAllBooks().then(saved => {
+          setBooks(saved);
+          setHasLoaded(true); 
+        });
+      }, []);
+
+      useEffect(() => {
+        if (hasLoaded) {
+          saveAllBooks(books);
+        }
+      }, [books, hasLoaded]);
+
+      // ฟังก์ชันแปลงไฟล์ภาพอัปโหลดเป็น Base64
+      const handleFileChange = (e, target) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          if (target === 1) setImgData1(reader.result);
+          if (target === 2) setImgData2(reader.result);
+        };
+        reader.readAsDataURL(file);
+      };
+
+      const handleSaveBook = (e) => {
+        e.preventDefault();
+        if (!titleInput.trim()) return alert("กรุณาระบุชื่อหนังสือ");
+
+        const maxId = books.length > 0 ? Math.max(...books.map(b => b.id)) : 0;
+        const newBook = {
+          id: maxId + 1,
+          title: titleInput,
+          author: authorInput || "ไม่ระบุผู้แต่ง",
+          status: statusInput,
+          totalPages: parseInt(totalPages) || 0,
+          currentPage: parseInt(currentPage) || 0,
+          imgType: imgType,
+          imgData1: imgData1,
+          imgData2: imgData2
+        };
+
+        setBooks(prev => [...prev, newBook]);
+        
+        // ล้างฟอร์ม
+        setTitleInput(""); setAuthorInput(""); setStatusInput("กำลังอ่าน"); setTotalPages(""); setCurrentPage("");
+        setImgType("single"); setImgData1(""); setImgData2("");
+        setShowAdd(false);
+      };
+
+      const handleDeleteBook = (id) => {
+        if (confirm("ต้องการลบหนังสือเล่มนี้ใช่หรือไม่?")) {
+          setBooks(prev => prev.filter(b => b.id !== id));
+          setSelected(null);
+        }
+      };
+
+      // ฟังก์ชันวาดตัวบัตรหนังสือ (Book Card) หน้าเว็บ
+      const renderBookCard = (book) => {
+        let progressPercent = 0;
+        if (book.status === "อ่านแล้ว") progressPercent = 100;
+        else if (book.totalPages > 0 && book.currentPage > 0) {
+          progressPercent = Math.min(Math.round((book.currentPage / book.totalPages) * 100), 100);
+        }
+
+        return React.createElement('div', {
+          key: book.id,
+          onClick: () => setSelected(book),
+          className: "book-card"
+        }, 
+          // ส่วนแสดงภาพหน้าปกบนบัตร (รูปเดี่ยว / รูปแบ่งครึ่ง)
+          React.createElement('div', {className: "cover-container"},
+            book.imgType === "split" ? [
+              book.imgData1 ? React.createElement('img', {src: book.imgData1, className: "split-cover", key: "s1"}) : React.createElement('div', {className: "split-cover", style:{display:"flex",alignItems:"center",justifyContainer:"center",fontSize:10}, key: "s1"}, "🖼️ ซ้าย"),
+              React.createElement('div', {className: "split-divider", key: "div"}),
+              book.imgData2 ? React.createElement('img', {src: book.imgData2, className: "split-cover", key: "s2"}) : React.createElement('div', {className: "split-cover", style:{display:"flex",alignItems:"center",justifyContainer:"center",fontSize:10}, key: "s2"}, "🖼️ ขวา")
+            ] : (
+              book.imgData1 ? React.createElement('img', {src: book.imgData1, className: "single-cover"}) : React.createElement('span', {style:{fontSize:40}}, "📚")
+            )
+          ),
+          
+          // ส่วนข้อมูลอักษรบนบัตร
+          React.createElement('div', {className: "card-info"},
+            React.createElement('div', {style:{fontWeight:700, fontSize:13, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}, book.title),
+            React.createElement('div', {style:{fontSize:11, color:"#94A3B8", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}, book.author)
+          ),
+          
+          // เส้นแถบความคืบหน้าสีแดงด้านล่าง
+          progressPercent > 0 && React.createElement('div', {className: "progress-container"},
+            React.createElement('div', {className: "progress-bar", style: {width: `${progressPercent}%`}})
+          )
+        );
+      };
+
+      const watchingRow = books.filter(b => b.status === "กำลังอ่าน");
+      const queueRow = books.filter(b => b.status === "ยังไม่ได้อ่าน");
+      const finishedRow = books.filter(b => b.status === "อ่านแล้ว");
+
+      return React.createElement('div', {style:{minHeight:"100vh", background:"#020617", color:"#F1F5F9", paddingBottom:100}},
+        // ส่วนแถบด้านบน (Header)
+        React.createElement('div', {style:{padding:"20px 16px", background:"linear-gradient(rgba(15,23,42,0.9),transparent)", display:"flex", justifyContent:"space-between", alignItems:"center", position:"sticky", top:0, zIndex:50, backdropFilter:"blur(8px)"}},
+          React.createElement('div', {style:{fontSize:22, fontWeight:900, color:"#E50914", letterSpacing:"-0.5px"}}, "🍿 BOOKFLIX"),
+          React.createElement('button', {
+            onClick: () => { setIsSyncing(true); setTimeout(() => { setIsSyncing(false); alert("✅ ซิงค์สำเร็จ"); }, 800); },
+            disabled: isSyncing,
+            style: {padding:"8px 16px", background:"#22C55E", border:"none", borderRadius:4, color:"#000", fontWeight:700, cursor:"pointer", fontSize:13}
+          }, isSyncing ? "🔄 ซิงค์อยู่..." : "☁️ ซิงค์ Cloud")
+        ),
+
+        // ปุ่มคำสั่งเพิ่มบัตรเล่มใหม่
+        React.createElement('div', {style:{padding:"0 16px"}},
+          React.createElement('button', {
+            onClick: () => setShowAdd(true),
+            style: {width:"100%", padding:14, background:"#E50914", border:"none", borderRadius:8, color:"#fff", fontSize:15, fontWeight:700, cursor:"pointer", boxShadow:"0 4px 12px rgba(229,9,20,0.3)"}
+          }, "+ เพิ่มหนังสือเล่มใหม่")
+        ),
+
+        // กลุ่มแถวสไลด์รายชื่อภาพ/บัตรหนังสือ
+        React.createElement('div', {}, 
+          React.createElement('div', {className: "row-title"}, "กำลังอ่านค้างอยู่ 🍿"),
+          React.createElement('div', {className: "netflix-row"}, 
+            watchingRow.length > 0 ? watchingRow.map(renderBookCard) : React.createElement('div', {style:{color:"#475569", fontSize:13, padding:10}}, "ไม่มีหนังสือที่กำลังอ่าน")
+          )
+        ),
+
+        React.createElement('div', {}, 
+          React.createElement('div', {className: "row-title"}, "ดองไว้ในคิว ⏳"),
+          React.createElement('div', {className: "netflix-row"}, 
+            queueRow.length > 0 ? queueRow.map(renderBookCard) : React.createElement('div', {style:{color:"#475569", fontSize:13, padding:10}}, "ไม่มีหนังสือในคิว")
+          )
+        ),
+
+        React.createElement('div', {}, 
+          React.createElement('div', {className: "row-title"}, "อ่านจบแล้ว ✨"),
+          React.createElement('div', {className: "netflix-row"}, 
+            finishedRow.length > 0 ? finishedRow.map(renderBookCard) : React.createElement('div', {style:{color:"#475569", fontSize:13, padding:10}}, "ยังไม่มีเล่มที่อ่านจบ")
+          )
+        ),
+
+        // ป็อปอัพหน้าต่างฟอร์ม สำหรับกรอกข้อมูลและอัปโหลดรูปภาพลงบัตร
+        showAdd && React.createElement('div', {className: "modal-bg"},
+          React.createElement('form', {onSubmit: handleSaveBook, className:"modal"},
+            React.createElement('h3', {style:{marginTop:0, color:"#E50914"}}, "เพิ่มรายการลง Bookflix"),
+            
+            React.createElement('label', {}, "ชื่อหนังสือ:"),
+            React.createElement('input', {type:"text", value: titleInput, onChange: e => setTitleInput(e.target.value), required: true, placeholder:"กรอกชื่อหนังสือ"}),
+            
+            React.createElement('label', {}, "ผู้แต่ง:"),
+            React.createElement('input', {type:"text", value: authorInput, onChange: e => setAuthorInput(e.target.value), placeholder:"กรอกชื่อผู้แต่ง"}),
+
+            React.createElement('label', {}, "สถานะการอ่าน:"),
+            React.createElement('select', {value: statusInput, onChange: e => setStatusInput(e.target.value)},
+              React.createElement('option', {value: "กำลังอ่าน"}, "🍿 กำลังอ่านค้างอยู่"),
+              React.createElement('option', {value: "ยังไม่ได้อ่าน"}, "⏳ ดองไว้ในคิว"),
+              React.createElement('option', {value: "อ่านแล้ว"}, "✨ อ่านจบแล้ว")
+            ),
+
+            React.createElement('div', {style:{display:"flex", gap:10}},
+              React.createElement('div', {style:{flex:1}},
+                React.createElement('label', {}, "จำนวนหน้าทั้งหมด:"),
+                React.createElement('input', {type:"number", value: totalPages, onChange: e => setTotalPages(e.target.value), placeholder:"เช่น 350"})
+              ),
+              React.createElement('div', {style:{flex:1}},
+                React.createElement('label', {}, "อ่านถึงหน้า:"),
+                React.createElement('input', {type:"number", value: currentPage, onChange: e => setCurrentPage(e.target.value), placeholder:"เช่น 120"})
+              )
+            ),
+
+            // --- ส่วนควบคุมระบบรูปภาพบนบัตรแบบใหม่ ---
+            React.createElement('label', {}, "รูปแบบรูปหน้าปกบัตร:"),
+            React.createElement('select', {value: imgType, onChange: e => { setImgType(e.target.value); setImgData1(""); setImgData2(""); }},
+              React.createElement('option', {value: "single"}, "🖼️ รูปเดียวเต็มบัตร"),
+              React.createElement('option', {value: "split"}, "🌓 แบ่งครึ่งรูปซ้าย-ขวา")
+            ),
+
+            imgType === "single" ? React.createElement('div', {},
+              React.createElement('label', {className: "file-input-label"}, "📁 เลือกอัปโหลดรูปหน้าปก"),
+              React.createElement('input', {type: "file", accept: "image/*", onChange: e => handleFileChange(e, 1), style:{display:"none"}})
+            ) : React.createElement('div', {style:{display:"flex", gap:10}},
+              React.createElement('div', {style:{flex:1}},
+                React.createElement('label', {className: "file-input-label"}, "📁 รูปฝั่งซ้าย"),
+                React.createElement('input', {type: "file", accept: "image/*", onChange: e => handleFileChange(e, 1), style:{display:"none"}})
+              ),
+              React.createElement('div', {style:{flex:1}},
+                React.createElement('label', {className: "file-input-label"}, "📁 รูปฝั่งขวา"),
+                React.createElement('input', {type: "file", accept: "image/*", onChange: e => handleFileChange(e, 2), style:{display:"none"}})
+              )
+            ),
+
+            // แสดงตัวอย่างรูปภาพก่อนกดบันทึกข้อมูล
+            (imgData1 || imgData2) && React.createElement('div', {className: "preview-box"},
+              imgData1 && React.createElement('img', {src: imgData1, className: "preview-img"}),
+              imgData2 && React.createElement('img', {src: imgData2, className: "preview-img"})
+            ),
+
+            React.createElement('div', {style:{display:"flex", gap:10, marginTop:10}},
+              React.createElement('button', {type:"button", onClick:()=>{ setShowAdd(false); setImgData1(""); setImgData2(""); }, style:{flex:1, padding:12, background:"#334155", border:"none", borderRadius:6, color:"#fff", cursor:"pointer", fontWeight:700}}, "ยกเลิก"),
+              React.createElement('button', {type:"submit", style:{flex:1, padding:12, background:"#E50914", border:"none", borderRadius:6, color:"#fff", fontWeight:700, cursor:"pointer"}}, "เพิ่มเข้าคลัง")
+            )
+          )
+        ),
+
+        // หน้าต่างสำหรับเข้าดูข้อมูลเต็มและปุ่มคำสั่งลบข้อมูลบัตรหนังสือ
+        selected && React.createElement('div', {className: "modal-bg"},
+          React.createElement('div', {className:"modal", style:{textAlign:"center"}},
+            React.createElement('div', {className: "cover-container", style:{height:220, borderRadius:8, marginBottom:16}},
+              selected.imgType === "split" ? [
+                selected.imgData1 && React.createElement('img', {src: selected.imgData1, className: "split-cover", key:"m1"}),
+                React.createElement('div', {className: "split-divider", key:"mdiv"}),
+                selected.imgData2 && React.createElement('img', {src: selected.imgData2, className: "split-cover", key:"m2"})
+              ] : (
+                selected.imgData1 ? React.createElement('img', {src: selected.imgData1, className: "single-cover"}) : React.createElement('span', {style:{fontSize:60}}, "📖")
+              )
+            ),
+            React.createElement('h3', {style:{margin:"10px 0"}}, selected.title),
+            React.createElement('p', {style:{color:"#94A3B8", margin:"0 0 4px"}}, "ผู้แต่ง: " + selected.author),
+            React.createElement('p', {style:{color:"#E50914", fontWeight:700, fontSize:14}}, `สถานะ: ${selected.status}`),
+            selected.totalPages > 0 && React.createElement('p', {style:{fontSize:13, color:"#6366F1"}}, `ความคืบหน้า: หน้า ${selected.currentPage} / ${selected.totalPages} (${Math.min(Math.round((selected.currentPage / selected.totalPages) * 100), 100)}%)`),
+            
+            React.createElement('div', {style:{display:"flex", flexDirection:"column", gap:10, marginTop:20}},
+              React.createElement('button', {onClick:()=>handleDeleteBook(selected.id), style:{width:"100%", padding:12, background:"#EF4444", border:"none", borderRadius:6, color:"#fff", fontWeight:700, cursor:"pointer"}}, "🗑️ ลบหนังสือ"),
+              React.createElement('button', {onClick:()=>setSelected(null), style:{width:"100%", padding:12, background:"#334155", border:"none", borderRadius:6, color:"#fff", cursor:"pointer"}}, "ปิด")
+            )
+          )
+        )
+      );
+    }
+
+    ReactDOM.render(React.createElement(App), document.getElementById('root'));
+  </script>
 </body>
 </html>
