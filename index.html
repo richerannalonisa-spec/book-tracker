@@ -1,2051 +1,2085 @@
-```react
-import React, { useState, useMemo, useEffect } from 'react';
-
-// === CONFIGURATION & CONSTANTS ===
-const GENRES = [
-  'นิยาย (Novel)',
-  'ไลท์โนเวล (Light Novel)',
-  'มังงะ (Manga)',
-  'พัฒนาตนเอง (Self-Improvement)',
-  'ธุรกิจและการเงิน (Business & Finance)',
-  'วิทยาศาสตร์ / เทคโนโลยี (Science/Tech)',
-  'จิตวิทยา / ปรัชญา (Psychology/Philosophy)',
-  'ประวัติศาสตร์ / วรรณกรรม (History/Literature)',
-  'อื่นๆ (Others)'
-];
-
-const INITIAL_PUBLISHERS = [
-  { id: 'pub-1', name: 'สยามอินเตอร์', color: '#E11D48' }, // Rose
-  { id: 'pub-2', name: 'เนชั่น', color: '#2563EB' },       // Blue
-  { id: 'pub-3', name: 'Phoenix Next', color: '#7C3AED' }, // Violet
-  { id: 'pub-4', name: 'WeLearn', color: '#059669' },      // Emerald
-  { id: 'pub-5', name: 'อมรินทร์', color: '#D97706' },      // Amber
-  { id: 'pub-6', name: 'Zenshu', color: '#DB2777' },       // Pink
-];
-
-export default function App() {
-  // === STATE MANAGEMENT ===
-  // 1. Books State
-  const [books, setBooks] = useState([]);
-  
-  // 2. Series State
-  const [series, setSeries] = useState([]);
-
-  // 3. Goals State
-  const [goals, setGoals] = useState([
-    { id: 'g-1', year: 2026, month: 6, targetBooks: 5, label: 'เป้าหมายมิถุนายน 2026' },
-    { id: 'g-2', year: 2026, month: 0, targetBooks: 50, label: 'เป้าหมายตลอดปี 2026' }
-  ]);
-
-  // 4. Reading Logs State (for Heatmap)
-  const [readingLogs, setReadingLogs] = useState({}); // Key: "YYYY-MM-DD", Value: { pages: number, hours: number }
-
-  // 5. Publisher List State
-  const [publishers, setPublishers] = useState(INITIAL_PUBLISHERS);
-
-  // 6. Navigation & UI State
-  const [activeTab, setActiveTab] = useState('dashboard'); // dashboard, books, series, goals, heatmap, profile
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedFilter, setSelectedFilter] = useState('all'); // all, unread-fav, uncompleted-hoard, year-2026, novel, general-book
-  const [selectedGenreFilter, setSelectedGenreFilter] = useState('all');
-  const [selectedPublisherFilter, setSelectedPublisherFilter] = useState('all');
-
-  // 7. Modals State
-  const [showAddBookModal, setShowAddBookModal] = useState(false);
-  const [showAddSeriesModal, setShowAddSeriesModal] = useState(false);
-  const [showAddGoalModal, setShowAddGoalModal] = useState(false);
-  const [showAddPublisherModal, setShowAddPublisherModal] = useState(false);
-  const [selectedBookForDetails, setSelectedBookForDetails] = useState(null);
-
-  // 8. Form State: New Book
-  const [newBook, setNewBook] = useState({
-    title: '',
-    author: '',
-    genre: GENRES[0],
-    status: 'ดอง', // Wishlist, ดอง, กำลังอ่าน, อ่านจบ, พักไว้, อ่านซ้ำ, ขายแล้ว
-    publisherId: INITIAL_PUBLISHERS[0].id,
-    volumeOwned: 1,
-    volumeTotal: 1,
-    note: '',
-    isFavorite: false,
-    cost: 0,
-    rating: 0, // 0 to 5
-    readingTime: 0, // in hours
-    startDate: '',
-    endDate: '',
-    quote: '',
-    insight: '',
-    imageLeft: '', // Full or Left Profile Photo URL
-    imageRight: '', // Right Profile Photo URL
-  });
-
-  // 9. Form State: New Series
-  const [newSeriesName, setNewSeriesName] = useState('');
-  
-  // 10. Form State: New Goal
-  const [newGoal, setNewGoal] = useState({
-    year: 2026,
-    month: 6,
-    targetBooks: 10,
-    label: ''
-  });
-
-  // 11. Form State: New Publisher
-  const [newPub, setNewPub] = useState({ name: '', color: '#3B82F6' });
-
-  // 12. Profile / Gamification State
-  const [userProfile, setUserProfile] = useState({
-    name: 'นักอ่านนิรนาม',
-    bio: 'ผู้แสวงหาความสงบในกองดองอันเป็นนิรันดร์ 📖',
-    photoLeft: 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&q=80&w=600',
-    photoRight: 'https://images.unsplash.com/photo-1506880018603-83d5b814b5a6?auto=format&fit=crop&q=80&w=600',
-    xp: 120, // Calculates automatically based on books read too
-  });
-
-  // === CALCULATIONS & DERIVED STATE ===
-  
-  // Automatically inject default sample data only if the state is empty and user requests a demonstration
-  // We keep it completely blank by default as requested: "ยังไม่ต้องเขียนข้อมูลอะไรก่อน"
-  // But we provide a "ปุ่มนำเข้าข้อมูลจำลอง" (Simulate Data Button) for convenient UX/UI testing.
-  
-  const injectSampleData = () => {
-    // 1. Setup sample books
-    const sampleBooks = [
-      {
-        id: 'b-1',
-        title: 'เซนส์และการเงินส่วนบุคคล',
-        author: 'ธนวัฒน์ ดีเลิศ',
-        genre: 'ธุรกิจและการเงิน (Business & Finance)',
-        status: 'อ่านจบ',
-        publisherId: 'pub-4',
-        volumeOwned: 1,
-        volumeTotal: 1,
-        note: 'เล่มนี้เปลี่ยนวิธีคิดเลย คุ้มค่าเงินมาก!',
-        isFavorite: true,
-        cost: 295,
-        rating: 5,
-        readingTime: 6,
-        startDate: '2026-06-01',
-        endDate: '2026-06-03',
-        quote: 'เงินไม่ได้ทำให้คุณมีความสุข แต่วิธีจัดการต่างหากที่กำหนดชีวิตคุณ',
-        insight: 'ควรเก็บออมแบบมีระบบ และลงทุนอย่างรอบคอบทันที',
-        imageLeft: 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&q=80&w=600',
-        imageRight: 'https://images.unsplash.com/photo-1506880018603-83d5b814b5a6?auto=format&fit=crop&q=80&w=600',
-      },
-      {
-        id: 'b-2',
-        title: 'กำเนิดใหม่ในต่างโลกกับพลังสุดโกง เล่ม 1',
-        author: 'มิตซึฮะ ชิน',
-        genre: 'ไลท์โนเวล (Light Novel)',
-        status: 'กำลังอ่าน',
-        publisherId: 'pub-3',
-        volumeOwned: 1,
-        volumeTotal: 5,
-        note: 'ซื้อดักไว้ก่อน สนุกมากจากเว็บ',
-        isFavorite: false,
-        cost: 180,
-        rating: 4,
-        readingTime: 2,
-        startDate: '2026-06-18',
-        endDate: '',
-        quote: 'นี่สิโลกแฟนตาซีที่ฉันคู่ควร!',
-        insight: 'ความเร็วในการดำเนินเรื่องดี ภาพประกอบสวยงาม',
-        imageLeft: '',
-        imageRight: '',
-      },
-      {
-        id: 'b-3',
-        title: 'วันเดอร์แลนด์ผู้สาบสูญ เล่ม 1',
-        author: 'อลิส การ์เด้น',
-        genre: 'นิยาย (Novel)',
-        status: 'ดอง',
-        publisherId: 'pub-1',
-        volumeOwned: 1,
-        volumeTotal: 10,
-        note: 'เห็นหน้าปกสวยเลยซื้อมาดอง',
-        isFavorite: false,
-        cost: 320,
-        rating: 0,
-        readingTime: 0,
-        startDate: '',
-        endDate: '',
-        quote: '',
-        insight: '',
-        imageLeft: '',
-        imageRight: '',
-      }
-    ];
-
-    const sampleSeries = [
-      { id: 's-1', name: 'กำเนิดใหม่ในต่างโลกกับพลังสุดโกง', bookIds: ['b-2'] },
-      { id: 's-2', name: 'วันเดอร์แลนด์ผู้สาบสูญ', bookIds: ['b-3'] }
-    ];
-
-    const sampleLogs = {
-      '2026-06-01': { pages: 50, hours: 2 },
-      '2026-06-02': { pages: 80, hours: 3 },
-      '2026-06-03': { pages: 40, hours: 1 },
-      '2026-06-18': { pages: 30, hours: 2 },
-    };
-
-    setBooks(sampleBooks);
-    setSeries(sampleSeries);
-    setReadingLogs(sampleLogs);
-  };
-
-  const clearAllData = () => {
-    setBooks([]);
-    setSeries([]);
-    setReadingLogs({});
-  };
-
-  // Compute stats
-  const stats = useMemo(() => {
-    const total = books.length;
-    const read = books.filter(b => b.status === 'อ่านจบ').length;
-    const reading = books.filter(b => b.status === 'กำลังอ่าน').length;
-    const hoard = books.filter(b => b.status === 'ดอง').length;
-    const wishlist = books.filter(b => b.status === 'Wishlist').length;
-    const sold = books.filter(b => b.status === 'ขายแล้ว').length;
-    
-    // Active count for financial statistics (excluding Wishlist which is planned, and Sold which shouldn't alter historic reading stats unless configured, but we keep sold costs in stats as they were spent)
-    const totalCost = books.reduce((acc, b) => acc + (Number(b.cost) || 0), 0);
-    const totalReadingTime = books.reduce((acc, b) => acc + (Number(b.readingTime) || 0), 0);
-    
-    // Calculate reading level (Level = books read count + bonus from logs hours)
-    // 1 book read = 10 XP, 1 hour read = 2 XP
-    const totalHoursLogged = Object.values(readingLogs).reduce((acc, log) => acc + (log.hours || 0), 0);
-    const calculatedXP = (read * 15) + (totalHoursLogged * 3);
-    const level = Math.floor(calculatedXP / 50) + 1; // 50 XP per level
-
-    // Series complete check
-    const nearCompleteSeries = series.map(s => {
-      const associatedBooks = books.filter(b => s.bookIds.includes(b.id));
-      if (associatedBooks.length === 0) return { ...s, percent: 0, owned: 0, total: 0 };
-      
-      const owned = associatedBooks.reduce((sum, b) => sum + (b.volumeOwned || 0), 0);
-      const total = associatedBooks.reduce((sum, b) => sum + (b.volumeTotal || 0), 0);
-      const percent = total > 0 ? Math.round((owned / total) * 100) : 0;
-      
-      return { ...s, percent, owned, total };
-    }).filter(s => s.percent > 0 && s.percent < 100)
-      .sort((a, b) => b.percent - a.percent);
-
-    return {
-      total,
-      read,
-      reading,
-      hoard,
-      wishlist,
-      sold,
-      totalCost,
-      totalReadingTime,
-      level,
-      xp: calculatedXP,
-      nearCompleteSeries
-    };
-  }, [books, series, readingLogs]);
-
-  // Publisher color & mapping helper
-  const getPublisher = (id) => {
-    return publishers.find(p => p.id === id) || { name: 'ไม่ระบุสำนักพิมพ์', color: '#9CA3AF' };
-  };
-
-  // Filtered books selection
-  const filteredBooks = useMemo(() => {
-    return books.filter(book => {
-      // 1. Search Query
-      const matchSearch = book.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          book.author.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          book.note.toLowerCase().includes(searchQuery.toLowerCase());
-      
-      if (!matchSearch) return false;
-
-      // 2. Main Preset Filters
-      let passPreset = true;
-      if (selectedFilter === 'unread-fav') {
-        passPreset = book.isFavorite && book.status === 'ดอง';
-      } else if (selectedFilter === 'uncompleted-hoard') {
-        passPreset = book.status === 'ดอง' && (book.volumeOwned < book.volumeTotal);
-      } else if (selectedFilter === 'year-2026') {
-        const date = book.startDate || book.endDate;
-        passPreset = date && date.startsWith('2026');
-      } else if (selectedFilter === 'novel') {
-        passPreset = book.genre.includes('นิยาย') || book.genre.includes('Novel');
-      } else if (selectedFilter === 'general-book') {
-        passPreset = !book.genre.includes('นิยาย') && !book.genre.includes('Novel') && !book.genre.includes('มังงะ') && !book.genre.includes('Manga');
-      }
-
-      if (!passPreset) return false;
-
-      // 3. Dropdown Genre Filter
-      if (selectedGenreFilter !== 'all' && book.genre !== selectedGenreFilter) return false;
-
-      // 4. Dropdown Publisher Filter
-      if (selectedPublisherFilter !== 'all' && book.publisherId !== selectedPublisherFilter) return false;
-
-      return true;
-    });
-  }, [books, searchQuery, selectedFilter, selectedGenreFilter, selectedPublisherFilter]);
-
-  // ROI Reading calculation
-  const roiAnalysis = useMemo(() => {
-    return books.map(b => {
-      const cost = Number(b.cost) || 0;
-      const hours = Number(b.readingTime) || 0;
-      const rating = Number(b.rating) || 0;
-
-      const costPerHour = hours > 0 ? (cost / hours).toFixed(1) : 'N/A';
-      const costPerRating = rating > 0 ? (cost / rating).toFixed(1) : 'N/A';
-      const costPerCompletion = b.status === 'อ่านจบ' ? cost.toFixed(1) : 'ดองอยู่/ยังไม่อ่านจบ';
-
-      // Insight builder
-      let insightText = '';
-      if (b.status === 'อ่านจบ') {
-        if (rating >= 4 && hours > 0 && (cost/hours) < 30) {
-          insightText = 'คุ้มค่าสุดยอด! 💖 ราคาต่อชั่วโมงถูกแถมคะแนนสูง';
-        } else if (rating <= 2 && cost > 250) {
-          insightText = 'เสียดายเงินและเวลา 💸 ราคาแพงแต่คะแนนน้อย';
-        } else {
-          insightText = 'คุ้มค่าตามเกณฑ์ทั่วไป 👍';
+```html
+<!DOCTYPE html>
+<html lang="th" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>The Ultimate Book Ledger & Analytics</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Tailwind Config for Dark Mode -->
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            slate: {
+              950: '#030712',
+            }
+          }
         }
-      } else {
-        insightText = 'ยังไม่ได้ปลดปล่อยคุณค่า (ดองอยู่) 🧊';
-      }
-
-      return {
-        ...b,
-        costPerHour,
-        costPerRating,
-        costPerCompletion,
-        insightText
-      };
-    });
-  }, [books]);
-
-  // Book buying behavior analysis (Book vs Novel)
-  const behaviorAnalytics = useMemo(() => {
-    let novelCost = 0;
-    let novelCount = 0;
-    let bookCost = 0;
-    let bookCount = 0;
-
-    books.forEach(b => {
-      const cost = Number(b.cost) || 0;
-      const isNovel = b.genre.includes('นิยาย') || b.genre.includes('Novel') || b.genre.includes('มังงะ') || b.genre.includes('Manga');
-      
-      if (isNovel) {
-        novelCost += cost;
-        novelCount += 1;
-      } else {
-        bookCost += cost;
-        bookCount += 1;
-      }
-    });
-
-    const isNovelDominated = novelCost > bookCost;
-
-    return {
-      novelCost,
-      novelCount,
-      bookCost,
-      bookCount,
-      isNovelDominated,
-      ratio: bookCount > 0 ? (novelCount / bookCount).toFixed(1) : novelCount
-    };
-  }, [books]);
-
-  // "Reading Brain" System Recommendation engine
-  const brainAdvice = useMemo(() => {
-    const unreadCount = stats.hoard;
-    const readCount = stats.read;
-    const wishlistCount = stats.wishlist;
-
-    let systemLock = false;
-    let adviceList = [];
-    let priorityBook = null;
-
-    // Lock condition if hoard is too high (e.g. more than 5 books unread)
-    if (unreadCount > 10) {
-      systemLock = true;
-      adviceList.push({
-        type: 'danger',
-        msg: '🔒 ระงับการเพิ่มหนังสือใหม่ชั่วคราว! อัตรากองดองของคุณวิกฤตแล้ว (ดอง > 10 เล่ม)'
-      });
-    } else if (unreadCount > 5) {
-      adviceList.push({
-        type: 'warning',
-        msg: '⚠️ เริ่มดองหนักแล้วนะ! ควรหยุดช้อปปิ้งหนังสือใหม่ชั่วคราวแล้วหันมาเคลียร์กองดอง'
-      });
-    } else {
-      adviceList.push({
-        type: 'success',
-        msg: '🎉 อัตราการดองอยู่ในเกณฑ์ดีเยี่ยม! สามารถรับสมาชิกใหม่เข้าคลังได้'
-      });
-    }
-
-    // Recommendation of what to read next
-    const urgentCandidates = books.filter(b => b.status === 'ดอง' || b.status === 'กำลังอ่าน');
-    if (urgentCandidates.length > 0) {
-      // Prioritize favorites first, or close series
-      const favoriteUnread = urgentCandidates.find(b => b.isFavorite);
-      if (favoriteUnread) {
-        priorityBook = favoriteUnread;
-      } else {
-        priorityBook = urgentCandidates[0];
       }
     }
-
-    if (priorityBook) {
-      adviceList.push({
-        type: 'info',
-        msg: `🎯 เล่มที่แนะนำเร่งอ่านวันนี้: "${priorityBook.title}" (${priorityBook.author})`
-      });
+  </script>
+  <!-- Font Awesome for premium icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Google Fonts for Prompt and Kanit -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700;800&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Prompt', sans-serif;
     }
-
-    return {
-      systemLock,
-      adviceList,
-      priorityBook
-    };
-  }, [books, stats]);
-
-  // === MUTATION FUNCTIONS ===
-  const handleAddBook = (e) => {
-    e.preventDefault();
-    if (!newBook.title) return;
-
-    if (brainAdvice.systemLock) {
-      alert('ระบบล็อกการเพิ่มหนังสือใหม่ เนื่องจากคุณมีกองดองสะสมมากเกินไป! กรุณาอ่านให้จบเพื่อปลดล็อก');
-      return;
+    .mono {
+      font-family: 'Share Tech Mono', monospace;
     }
-
-    const bookId = 'b-' + Date.now();
-    const createdBook = {
-      ...newBook,
-      id: bookId,
-      cost: Number(newBook.cost) || 0,
-      volumeOwned: Number(newBook.volumeOwned) || 1,
-      volumeTotal: Number(newBook.volumeTotal) || 1,
-      readingTime: Number(newBook.readingTime) || 0,
-      rating: Number(newBook.rating) || 0,
-    };
-
-    setBooks(prev => [...prev, createdBook]);
-
-    // Check if series selected, append to series automatically
-    const targetSeries = series.find(s => s.name.trim() === createdBook.title.replace(/\s*เล่ม\s*\d+/g, '').trim());
-    if (targetSeries) {
-      setSeries(prev => prev.map(s => s.id === targetSeries.id ? { ...s, bookIds: [...s.bookIds, bookId] } : s));
-    } else {
-      // Auto-create series if volume total > 1
-      if (createdBook.volumeTotal > 1) {
-        const cleanName = createdBook.title.replace(/\s*เล่ม\s*\d+/g, '').trim();
-        const newSeriesId = 's-' + Date.now();
-        setSeries(prev => [...prev, {
-          id: newSeriesId,
-          name: cleanName,
-          bookIds: [bookId]
-        }]);
-      }
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
     }
-
-    // Reset Form
-    setNewBook({
-      title: '',
-      author: '',
-      genre: GENRES[0],
-      status: 'ดอง',
-      publisherId: publishers[0]?.id || '',
-      volumeOwned: 1,
-      volumeTotal: 1,
-      note: '',
-      isFavorite: false,
-      cost: 0,
-      rating: 0,
-      readingTime: 0,
-      startDate: '',
-      endDate: '',
-      quote: '',
-      insight: '',
-      imageLeft: '',
-      imageRight: '',
-    });
-    setShowAddBookModal(false);
-  };
-
-  const handleDeleteBook = (id) => {
-    // We update status to 'ขายแล้ว' (Sold) instead of deleting, to preserve historical financial charts
-    setBooks(prev => prev.map(b => b.id === id ? { ...b, status: 'ขายแล้ว' } : b));
-  };
-
-  const handlePermanentDeleteBook = (id) => {
-    setBooks(prev => prev.filter(b => b.id !== id));
-  };
-
-  const handleAddSeries = (e) => {
-    e.preventDefault();
-    if (!newSeriesName) return;
-    setSeries(prev => [...prev, {
-      id: 's-' + Date.now(),
-      name: newSeriesName,
-      bookIds: []
-    }]);
-    setNewSeriesName('');
-    setShowAddSeriesModal(false);
-  };
-
-  const handleAddGoal = (e) => {
-    e.preventDefault();
-    setGoals(prev => [...prev, {
-      id: 'g-' + Date.now(),
-      year: Number(newGoal.year),
-      month: Number(newGoal.month),
-      targetBooks: Number(newGoal.targetBooks),
-      label: newGoal.label || `เป้าหมายใหม่ ปี ${newGoal.year}`
-    }]);
-    setShowAddGoalModal(false);
-  };
-
-  const handleAddPublisher = (e) => {
-    e.preventDefault();
-    if (!newPub.name) return;
-    setPublishers(prev => [...prev, {
-      id: 'pub-' + Date.now(),
-      name: newPub.name,
-      color: newPub.color
-    }]);
-    setNewPub({ name: '', color: '#3B82F6' });
-    setShowAddPublisherModal(false);
-  };
-
-  // Log reading progress directly into daily heatmap
-  const handleLogProgress = (date, pages, hours) => {
-    if (!date) return;
-    setReadingLogs(prev => ({
-      ...prev,
-      [date]: {
-        pages: (prev[date]?.pages || 0) + Number(pages),
-        hours: (prev[date]?.hours || 0) + Number(hours)
-      }
-    }));
-  };
-
-  // Render the GitHub Heatmap for 2026 or chosen range
-  const renderHeatmap = () => {
-    const daysOfYear = [];
-    const startDate = new Date('2026-01-01');
-    const endDate = new Date('2026-12-31');
-    let current = new Date(startDate);
-
-    while (current <= endDate) {
-      daysOfYear.push(new Date(current));
-      current.setDate(current.getDate() + 1);
+    ::-webkit-scrollbar-track {
+      background: #0b1329;
     }
+    ::-webkit-scrollbar-thumb {
+      background: #3b82f6;
+      border-radius: 10px;
+    }
+    /* Glassmorphism utility */
+    .glass {
+      background: rgba(15, 23, 42, 0.6);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col pb-20 md:pb-0">
 
-    // Week structure layout for calendar heatmap
-    return (
-      <div className="overflow-x-auto p-4 bg-slate-900 border border-slate-800 rounded-2xl">
-        <h4 className="text-sm font-semibold text-slate-300 mb-3 flex items-center gap-2">
-          📅 Heatmap บันทึกการอ่านรายวัน (ปี 2026)
-        </h4>
-        <div className="grid grid-flow-col grid-rows-7 gap-1 w-max">
-          {daysOfYear.map((day, idx) => {
-            const dateStr = day.toISOString().split('T')[0];
-            const log = readingLogs[dateStr] || { pages: 0, hours: 0 };
-            
-            // Define colors depending on density
-            let colorClass = 'bg-slate-800';
-            if (log.pages > 50) colorClass = 'bg-emerald-400';
-            else if (log.pages > 30) colorClass = 'bg-emerald-500 opacity-90';
-            else if (log.pages > 10) colorClass = 'bg-emerald-600 opacity-70';
-            else if (log.pages > 0) colorClass = 'bg-emerald-800 opacity-50';
-
-            return (
-              <div
-                key={idx}
-                className={`w-3 h-3 rounded-sm transition-all hover:scale-125 cursor-pointer relative group ${colorClass}`}
-                title={`${dateStr} | อ่าน: ${log.pages} หน้า (${log.hours} ชม.)`}
-              >
-                {/* Tooltip on Hover */}
-                <div className="absolute hidden group-hover:block bottom-5 left-1/2 -translate-x-1/2 bg-slate-950 text-[10px] text-white py-1 px-2 rounded-md whitespace-nowrap z-50 shadow-xl border border-slate-700">
-                  {dateStr}: {log.pages} หน้า ({log.hours} ชม.)
-                </div>
-              </div>
-            );
-          })}
+  <!-- === MAIN CONTROLLER / STATE ENGINE === -->
+  <div id="app" class="flex-1 flex flex-col md:flex-row">
+    
+    <!-- === DESKTOP SIDEBAR === -->
+    <aside class="hidden md:flex flex-col w-72 bg-slate-900 border-r border-slate-800 p-5 space-y-6 shrink-0">
+      <div class="flex items-center gap-3">
+        <div class="p-2.5 bg-gradient-to-tr from-violet-600 to-indigo-500 rounded-2xl shadow-lg text-white text-xl">
+          <i class="fa-solid fa-book-open-reader"></i>
         </div>
-        <div className="flex justify-between items-center mt-3 text-xs text-slate-400">
-          <span>ม.ค. 2026</span>
-          <div className="flex gap-1 items-center">
-            <span>น้อย</span>
-            <div className="w-3.5 h-3.5 bg-slate-800 rounded-sm"></div>
-            <div className="w-3.5 h-3.5 bg-emerald-800 opacity-50 rounded-sm"></div>
-            <div className="w-3.5 h-3.5 bg-emerald-600 opacity-70 rounded-sm"></div>
-            <div className="w-3.5 h-3.5 bg-emerald-400 rounded-sm"></div>
-            <span>มาก</span>
-          </div>
-          <span>ธ.ค. 2026</span>
+        <div>
+          <h1 class="text-base font-bold bg-gradient-to-r from-violet-400 via-pink-400 to-amber-300 bg-clip-text text-transparent">
+            BOOK LEDGER
+          </h1>
+          <p class="text-[10px] text-slate-400 uppercase tracking-widest font-bold">Intelligence Suite</p>
         </div>
       </div>
-    );
-  };
 
-  return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
-      
-      {/* === HEADER / NAVIGATION === */}
-      <header className="sticky top-0 z-40 bg-slate-900/95 backdrop-blur-md border-b border-slate-800 py-3 px-4 md:px-8 flex justify-between items-center shadow-lg">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-gradient-to-tr from-violet-600 to-indigo-500 rounded-xl shadow-inner text-white text-xl">
-            📚
+      <!-- Quick Profile Card inside Sidebar -->
+      <div id="sidebar-profile-card" class="p-4 bg-slate-950/60 border border-slate-800/80 rounded-2xl space-y-3">
+        <div class="flex items-center gap-3">
+          <div id="sidebar-avatar" class="w-11 h-11 rounded-full border-2 border-violet-500 flex items-center justify-center font-bold text-white bg-slate-800">
+            LV
           </div>
-          <div>
-            <h1 className="text-lg md:text-xl font-bold bg-gradient-to-r from-violet-400 via-pink-400 to-amber-300 bg-clip-text text-transparent">
-              My Personal Book Haven
-            </h1>
-            <p className="text-[10px] text-slate-400 font-medium tracking-wider uppercase">
-              ระบบคลังหนังสือและการเงินเพื่อความคุ้มค่าการอ่าน
-            </p>
+          <div class="overflow-hidden">
+            <p id="sidebar-user-name" class="text-xs font-bold text-slate-200 truncate">กำลังโหลด...</p>
+            <span class="text-[9px] bg-violet-600/20 text-violet-400 border border-violet-500/30 px-1.5 py-0.5 rounded font-black">
+              LEVEL <span id="sidebar-level">1</span>
+            </span>
           </div>
         </div>
-
-        {/* Demo Controller Actions */}
-        <div className="flex items-center gap-2">
-          {books.length === 0 && (
-            <button
-              onClick={injectSampleData}
-              className="text-xs bg-violet-600 hover:bg-violet-700 text-white py-1.5 px-3 rounded-lg transition-all flex items-center gap-1.5 font-medium shadow-md"
-            >
-              📥 นำเข้าตัวอย่างสาธิต
-            </button>
-          )}
-          {books.length > 0 && (
-            <button
-              onClick={clearAllData}
-              className="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 py-1.5 px-3 rounded-lg transition-all"
-            >
-              🧹 ล้างข้อมูลทั้งหมด
-            </button>
-          )}
+        <div class="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+          <div id="sidebar-xp-bar" class="bg-gradient-to-r from-violet-500 to-pink-500 h-full transition-all duration-500" style="width: 20%;"></div>
         </div>
-      </header>
+      </div>
 
-      {/* Main Responsive Grid Layout */}
-      <div className="flex-1 flex flex-col md:flex-row">
+      <!-- Navigation Menu -->
+      <nav class="space-y-1 flex-1">
+        <button onclick="switchTab('dashboard')" class="tab-btn active w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all text-left">
+          <i class="fa-solid fa-chart-pie text-base text-violet-400"></i>
+          <span>แดชบอร์ด & สถิติ</span>
+        </button>
+        <button onclick="switchTab('books')" class="tab-btn w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all text-left text-slate-400 hover:bg-slate-800 hover:text-slate-200">
+          <i class="fa-solid fa-bookmark text-base text-sky-400"></i>
+          <span>คลังหนังสือหลัก</span>
+        </button>
+        <button onclick="switchTab('series')" class="tab-btn w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all text-left text-slate-400 hover:bg-slate-800 hover:text-slate-200">
+          <i class="fa-solid fa-layer-group text-base text-emerald-400"></i>
+          <span>ตารางซีรีส์ชุด</span>
+        </button>
+        <button onclick="switchTab('goals')" class="tab-btn w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all text-left text-slate-400 hover:bg-slate-800 hover:text-slate-200">
+          <i class="fa-solid fa-bullseye text-base text-rose-400"></i>
+          <span>เป้าหมายการอ่าน</span>
+        </button>
+        <button onclick="switchTab('focus')" class="tab-btn w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all text-left text-slate-400 hover:bg-slate-800 hover:text-slate-200">
+          <i class="fa-solid fa-hourglass-start text-base text-amber-400"></i>
+          <span>Focus Mode อ่านจริง</span>
+        </button>
+        <button onclick="switchTab('profile')" class="tab-btn w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all text-left text-slate-400 hover:bg-slate-800 hover:text-slate-200">
+          <i class="fa-solid fa-id-card text-base text-pink-400"></i>
+          <span>บัตรรางวัลเกียรติยศ</span>
+        </button>
+      </nav>
+
+      <!-- Simulation Action Buttons -->
+      <div class="pt-4 border-t border-slate-800/80 space-y-2">
+        <button onclick="injectDemoData()" class="w-full text-xs bg-slate-800 hover:bg-slate-700 py-2.5 px-3 rounded-xl transition-all font-semibold flex items-center justify-center gap-2">
+          <i class="fa-solid fa-circle-nodes text-indigo-400"></i>
+          <span>นำเข้าฐานข้อมูลสาธิต</span>
+        </button>
+        <button onclick="clearSystemData()" class="w-full text-xs text-rose-400 hover:bg-rose-950/20 py-2 px-3 rounded-lg transition-all text-center">
+          ล้างฐานข้อมูลระบบ
+        </button>
+      </div>
+    </aside>
+
+    <!-- === MOBILE TOP BAR === -->
+    <header class="md:hidden sticky top-0 z-40 bg-slate-900/95 backdrop-blur-md border-b border-slate-800 p-4 flex justify-between items-center shadow-md">
+      <div class="flex items-center gap-2.5">
+        <div class="p-2 bg-gradient-to-tr from-violet-600 to-indigo-500 rounded-xl text-white text-xs">
+          <i class="fa-solid fa-book-open-reader"></i>
+        </div>
+        <h1 class="text-sm font-extrabold bg-gradient-to-r from-violet-400 to-pink-400 bg-clip-text text-transparent">
+          BOOK LEDGER
+        </h1>
+      </div>
+      <div class="flex items-center gap-2">
+        <button onclick="injectDemoData()" class="text-[10px] bg-slate-800 px-2.5 py-1.5 rounded-lg font-bold">
+          Demo
+        </button>
+        <button onclick="openModal('add-book-modal')" class="text-xs bg-violet-600 hover:bg-violet-700 text-white px-2.5 py-1.5 rounded-lg font-bold">
+          <i class="fa-solid fa-plus"></i>
+        </button>
+      </div>
+    </header>
+
+    <!-- === MAIN SCROLL CONTENT AREA === -->
+    <main class="flex-1 p-4 md:p-8 overflow-y-auto space-y-6">
+
+      <!-- AI ASSISTANT WARNINGS -->
+      <div class="bg-gradient-to-r from-slate-900 to-indigo-950/40 border border-slate-800 p-4 rounded-2xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 shadow-xl">
+        <div class="space-y-1">
+          <div class="flex items-center gap-2 text-xs font-bold text-violet-400 uppercase tracking-wider">
+            <i class="fa-solid fa-brain"></i>
+            <span>สมองวิเคราะห์พฤติกรรมการอ่าน (Reading Brain AI)</span>
+          </div>
+          <p id="ai-alert-message" class="text-xs text-slate-300">
+            พร้อมรับรายงานและข้อสังเกตพฤติกรรมการดองหนังสือของคุณแล้วหรือยัง?
+          </p>
+        </div>
+        <div class="flex gap-2">
+          <button onclick="openModal('add-book-modal')" id="add-book-trigger-btn" class="text-xs bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white py-2 px-4 rounded-xl font-bold shadow-lg shadow-violet-950 transition-all flex items-center gap-1.5">
+            <i class="fa-solid fa-plus"></i>
+            <span>เพิ่มหนังสือใหม่</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- ==========================================================
+          TAB 1: DASHBOARD
+         ========================================================== -->
+      <section id="tab-dashboard" class="tab-content space-y-6">
         
-        {/* === SIDEBAR NAVIGATION === */}
-        <aside className="w-full md:w-64 bg-slate-900 border-b md:border-b-0 md:border-r border-slate-800 p-4 space-y-2">
-          <div className="hidden md:block pb-4 mb-4 border-b border-slate-800">
-            <div className="flex items-center gap-3 p-2 bg-slate-950/60 rounded-xl">
-              <div className="w-10 h-10 rounded-full overflow-hidden bg-violet-500 flex items-center justify-center font-bold text-white shadow-md">
-                LV.{stats.level}
-              </div>
-              <div className="overflow-hidden">
-                <p className="text-sm font-semibold truncate text-slate-200">{userProfile.name}</p>
-                <div className="w-28 bg-slate-800 h-1.5 rounded-full overflow-hidden mt-1">
-                  <div 
-                    className="bg-gradient-to-r from-violet-500 to-pink-500 h-full"
-                    style={{ width: `${(stats.xp % 50) * 2}%` }}
-                  ></div>
-                </div>
-              </div>
-            </div>
+        <!-- Summary Dashboard Grid -->
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div class="bg-slate-900 border border-slate-800/80 p-4 rounded-2xl shadow-lg relative overflow-hidden group">
+            <p class="text-[11px] font-medium text-slate-400">อ่านสำเร็จสะสม</p>
+            <h3 id="stat-read-count" class="text-2xl md:text-3xl font-extrabold text-emerald-400 mt-1">0 เล่ม</h3>
+            <p class="text-[9px] text-slate-500 mt-1">เป้าหมายจะถูกอัปเกรดอัตโนมัติ</p>
+            <div class="absolute right-3 bottom-3 text-slate-800/40 text-4xl font-bold"><i class="fa-solid fa-circle-check"></i></div>
+          </div>
+          
+          <div class="bg-slate-900 border border-slate-800/80 p-4 rounded-2xl shadow-lg relative overflow-hidden group">
+            <p class="text-[11px] font-medium text-slate-400">ยอดดองในกอง</p>
+            <h3 id="stat-hoard-count" class="text-2xl md:text-3xl font-extrabold text-amber-400 mt-1">0 เล่ม</h3>
+            <p class="text-[9px] text-slate-500 mt-1">จำกัดสถิติการดองสูงสุด</p>
+            <div class="absolute right-3 bottom-3 text-slate-800/40 text-4xl font-bold"><i class="fa-solid fa-box"></i></div>
           </div>
 
-          <nav className="flex md:flex-col gap-1.5 overflow-x-auto md:overflow-visible py-2 md:py-0">
-            {[
-              { id: 'dashboard', label: '📊 แดชบอร์ด & สถิติ', icon: '⚡' },
-              { id: 'books', label: '📚 คลังหนังสือทั้งหมด', icon: '📖' },
-              { id: 'series', label: '🧩 ซีรีส์ & หนังสือชุด', icon: '⛓️' },
-              { id: 'goals', label: '🎯 เป้าหมายการอ่าน', icon: '🏆' },
-              { id: 'heatmap', label: '📅 ปฏิทินและรังผึ้ง', icon: '🔥' },
-              { id: 'profile', label: '🎫 บัตรสะสมรางวัล', icon: '🎖️' },
-            ].map(item => (
-              <button
-                key={item.id}
-                onClick={() => setActiveTab(item.id)}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all whitespace-nowrap w-full ${
-                  activeTab === item.id 
-                    ? 'bg-violet-600/25 text-violet-300 border-l-4 border-violet-500 shadow-md' 
-                    : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'
-                }`}
-              >
-                <span className="text-base">{item.icon}</span>
-                <span>{item.label}</span>
-              </button>
-            ))}
-          </nav>
-        </aside>
-
-        {/* === MAIN CONTENT BODY === */}
-        <main className="flex-1 p-4 md:p-8 overflow-y-auto space-y-6">
-
-          {/* SYSTEM BRAIN WARNINGS */}
-          {brainAdvice.adviceList.length > 0 && (
-            <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <div className="space-y-1.5">
-                <span className="text-xs font-bold text-violet-400 uppercase tracking-widest flex items-center gap-1.5">
-                  🧠 สมองของระบบ (Reading Brain AI Assistant)
-                </span>
-                <div className="space-y-1">
-                  {brainAdvice.adviceList.map((adv, idx) => (
-                    <p key={idx} className={`text-sm ${
-                      adv.type === 'danger' ? 'text-rose-400 font-semibold' :
-                      adv.type === 'warning' ? 'text-amber-400' :
-                      adv.type === 'success' ? 'text-emerald-400' : 'text-indigo-300'
-                    }`}>
-                      {adv.msg}
-                    </p>
-                  ))}
-                </div>
-              </div>
-              
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setShowAddBookModal(true)}
-                  disabled={brainAdvice.systemLock}
-                  className={`text-sm font-semibold py-2 px-4 rounded-xl shadow-lg transition-all flex items-center gap-2 ${
-                    brainAdvice.systemLock
-                      ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
-                      : 'bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white'
-                  }`}
-                >
-                  ➕ เพิ่มหนังสือใหม่
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* =======================================================
-              TAB 1: DASHBOARD & STATS 
-             ======================================================= */}
-          {activeTab === 'dashboard' && (
-            <div className="space-y-6">
-              
-              {/* Quick Stats Grid */}
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="bg-slate-900 border border-slate-800/80 p-4 rounded-2xl shadow-md relative overflow-hidden group">
-                  <div className="absolute right-2 bottom-2 text-slate-800/50 text-5xl group-hover:scale-110 transition-transform font-bold">✓</div>
-                  <p className="text-xs font-medium text-slate-400">อ่านจบสะสม</p>
-                  <h3 className="text-2xl md:text-3xl font-extrabold text-emerald-400 mt-1">{stats.read} เล่ม</h3>
-                  <p className="text-[10px] text-slate-500 mt-1">จากทั้งหมด {stats.total} เล่ม</p>
-                </div>
-                
-                <div className="bg-slate-900 border border-slate-800/80 p-4 rounded-2xl shadow-md relative overflow-hidden group">
-                  <div className="absolute right-2 bottom-2 text-slate-800/50 text-5xl group-hover:scale-110 transition-transform font-bold">🧊</div>
-                  <p className="text-xs font-medium text-slate-400">กองดองสะสม</p>
-                  <h3 className="text-2xl md:text-3xl font-extrabold text-amber-400 mt-1">{stats.hoard} เล่ม</h3>
-                  <p className="text-[10px] text-slate-500 mt-1">คอยปลดปล่อยคุณค่า</p>
-                </div>
-
-                <div className="bg-slate-900 border border-slate-800/80 p-4 rounded-2xl shadow-md relative overflow-hidden group">
-                  <div className="absolute right-2 bottom-2 text-slate-800/50 text-5xl group-hover:scale-110 transition-transform font-bold">💰</div>
-                  <p className="text-xs font-medium text-slate-400">เงินที่เปย์ทั้งหมด</p>
-                  <h3 className="text-2xl md:text-3xl font-extrabold text-blue-400 mt-1">฿{stats.totalCost.toLocaleString()}</h3>
-                  <p className="text-[10px] text-slate-500 mt-1">งบประมาณรวมคลัง</p>
-                </div>
-
-                <div className="bg-slate-900 border border-slate-800/80 p-4 rounded-2xl shadow-md relative overflow-hidden group">
-                  <div className="absolute right-2 bottom-2 text-slate-800/50 text-5xl group-hover:scale-110 transition-transform font-bold">⏳</div>
-                  <p className="text-xs font-medium text-slate-400">เวลาอ่านทั้งหมด</p>
-                  <h3 className="text-2xl md:text-3xl font-extrabold text-violet-400 mt-1">{stats.totalReadingTime} ชม.</h3>
-                  <p className="text-[10px] text-slate-500 mt-1">สถิติประสิทธิภาพสูง</p>
-                </div>
-              </div>
-
-              {/* Behavior & Financial Analytics Panel */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                
-                {/* Book vs Novel Financial Behavior Card */}
-                <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl space-y-4 shadow-xl">
-                  <h3 className="text-base font-bold text-slate-200 flex items-center gap-2">
-                    📊 การจ่ายเงิน (หนังสือทั่วไป VS นิยาย)
-                  </h3>
-                  <p className="text-xs text-slate-400">
-                    เปรียบเทียบค่าใช้จ่ายและพฤติกรรมการอุดหนุนแบบอัปเดตเรียลไทม์
-                  </p>
-
-                  <div className="space-y-4">
-                    {/* Visual Bar Graph */}
-                    <div className="h-4 w-full bg-slate-800 rounded-full overflow-hidden flex">
-                      {stats.totalCost > 0 ? (
-                        <>
-                          <div 
-                            style={{ width: `${(behaviorAnalytics.novelCost / stats.totalCost) * 100}%` }}
-                            className="bg-gradient-to-r from-pink-500 to-violet-500"
-                            title={`นิยาย: ฿${behaviorAnalytics.novelCost}`}
-                          ></div>
-                          <div 
-                            style={{ width: `${(behaviorAnalytics.bookCost / stats.totalCost) * 100}%` }}
-                            className="bg-gradient-to-r from-indigo-500 to-cyan-400"
-                            title={`หนังสือทั่วไป: ฿${behaviorAnalytics.bookCost}`}
-                          ></div>
-                        </>
-                      ) : (
-                        <div className="w-full bg-slate-700"></div>
-                      )}
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4 text-xs pt-2">
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-1.5 text-pink-400 font-semibold">
-                          <span className="w-2.5 h-2.5 bg-pink-500 rounded-full"></span>
-                          <span>นิยาย & มังงะ</span>
-                        </div>
-                        <p className="text-lg font-bold text-slate-200">฿{behaviorAnalytics.novelCost}</p>
-                        <p className="text-[10px] text-slate-500">{behaviorAnalytics.novelCount} เล่มที่สะสม</p>
-                      </div>
-
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-1.5 text-indigo-400 font-semibold">
-                          <span className="w-2.5 h-2.5 bg-indigo-500 rounded-full"></span>
-                          <span>หนังสือทั่วไป</span>
-                        </div>
-                        <p className="text-lg font-bold text-slate-200">฿{behaviorAnalytics.bookCost}</p>
-                        <p className="text-[10px] text-slate-500">{behaviorAnalytics.bookCount} เล่มที่สะสม</p>
-                      </div>
-                    </div>
-
-                    <div className="p-3 bg-slate-950/50 rounded-xl border border-slate-800/80 text-xs">
-                      <p className="text-slate-300 font-medium">💡 ข้อสังเกตพฤติกรรม:</p>
-                      <p className="text-slate-400 mt-1">
-                        {stats.total === 0 
-                          ? 'ยังไม่มีข้อมูลหนังสือในระบบเพื่อประเมินผล' 
-                          : behaviorAnalytics.isNovelDominated 
-                            ? 'คุณจ่ายหนักไปทางหมวดบันเทิง/นิยาย ควรแบ่งส่วนเติมความรู้ทางวิชาการเพื่อการพัฒนาทักษะบ้าง'
-                            : 'คุณเน้นศึกษาความรู้จากหนังสือหมวดพัฒนาตนเองหรือการทำงาน ยอดเยี่ยมมากสำหรับการเติมศักยภาพ!'
-                        }
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Pie Chart: Read VS Hoarded */}
-                <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl flex flex-col justify-between shadow-xl">
-                  <div>
-                    <h3 className="text-base font-bold text-slate-200 mb-2 flex items-center gap-2">
-                      📊 ดอง VS อ่าน (Reading Status Proportion)
-                    </h3>
-                    <p className="text-xs text-slate-400">ความคืบหน้าของกองดองของคุณ</p>
-                  </div>
-
-                  <div className="my-6 flex justify-center relative items-center">
-                    {/* Clean SVG Donut Chart */}
-                    <svg width="150" height="150" viewBox="0 0 36 36" className="transform -rotate-90">
-                      <circle cx="18" cy="18" r="15.915" fill="none" stroke="#1E293B" strokeWidth="3" />
-                      {stats.total > 0 && (
-                        <>
-                          {/* Read percentage segment */}
-                          <circle 
-                            cx="18" cy="18" r="15.915" 
-                            fill="none" 
-                            stroke="#10B981" 
-                            strokeWidth="3.2" 
-                            strokeDasharray={`${(stats.read / stats.total) * 100} ${100 - ((stats.read / stats.total) * 100)}`} 
-                            strokeDashoffset="100" 
-                          />
-                          {/* Hoarded percentage segment */}
-                          <circle 
-                            cx="18" cy="18" r="15.915" 
-                            fill="none" 
-                            stroke="#F59E0B" 
-                            strokeWidth="3.2" 
-                            strokeDasharray={`${(stats.hoard / stats.total) * 100} ${100 - ((stats.hoard / stats.total) * 100)}`} 
-                            strokeDashoffset={100 - ((stats.read / stats.total) * 100)} 
-                          />
-                        </>
-                      )}
-                    </svg>
-                    
-                    <div className="absolute text-center">
-                      <p className="text-xs text-slate-400 font-medium">สำเร็จแล้ว</p>
-                      <h4 className="text-xl font-bold text-emerald-400">
-                        {stats.total > 0 ? Math.round((stats.read / stats.total) * 100) : 0}%
-                      </h4>
-                    </div>
-                  </div>
-
-                  <div className="flex justify-around text-xs text-slate-300">
-                    <div className="flex items-center gap-2">
-                      <span className="w-3 h-3 bg-emerald-500 rounded-full block"></span>
-                      <span>อ่านจบ ({stats.read})</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="w-3 h-3 bg-amber-500 rounded-full block"></span>
-                      <span>ดอง ({stats.hoard})</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* KPI Series Close to completion */}
-                <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl flex flex-col justify-between shadow-xl">
-                  <div>
-                    <h3 className="text-base font-bold text-slate-200 mb-2 flex items-center gap-2">
-                      🧩 ซีรีส์ที่ใกล้ครบชุด (Close to Complete)
-                    </h3>
-                    <p className="text-xs text-slate-400">ซีรีส์ที่สะสมใกล้เต็มชุดแต่คุณยังไม่พาทีมเข้าเส้นชัย</p>
-                  </div>
-
-                  <div className="space-y-4 my-4 flex-1 overflow-y-auto max-h-56 pr-1">
-                    {stats.nearCompleteSeries.length === 0 ? (
-                      <div className="h-full flex flex-col items-center justify-center text-center text-slate-500 py-6">
-                        <p className="text-sm">ไม่มีซีรีส์สะสมที่ค้างคาอยู่</p>
-                        <p className="text-[10px] mt-1">ซีรีส์จะถูกคัดลงที่นี่เมื่อความคืบหน้าอยู่ระหว่าง 1-99%</p>
-                      </div>
-                    ) : (
-                      stats.nearCompleteSeries.map(s => (
-                        <div key={s.id} className="space-y-1">
-                          <div className="flex justify-between text-xs font-semibold text-slate-200">
-                            <span className="truncate max-w-[150px]">{s.name}</span>
-                            <span className="text-indigo-400">{s.owned}/{s.total} เล่ม ({s.percent}%)</span>
-                          </div>
-                          <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
-                            <div 
-                              className="bg-gradient-to-r from-violet-500 to-indigo-500 h-full rounded-full"
-                              style={{ width: `${s.percent}%` }}
-                            ></div>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-
-                  <button
-                    onClick={() => setActiveTab('series')}
-                    className="w-full text-center text-xs text-indigo-400 hover:text-indigo-300 font-semibold"
-                  >
-                    จัดการซีรีส์ทั้งหมด →
-                  </button>
-                </div>
-
-              </div>
-
-              {/* Publisher & Genre Custom High-fidelity Analytics Graphs */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                
-                {/* Custom bar chart of genre analytics */}
-                <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl shadow-xl space-y-4">
-                  <h3 className="text-base font-bold text-slate-200 flex items-center gap-2">
-                    📈 ยอดอ่านแบ่งตามประเภท (Genre Analytics)
-                  </h3>
-                  
-                  <div className="space-y-3">
-                    {GENRES.map(genre => {
-                      const list = books.filter(b => b.genre === genre);
-                      const readList = list.filter(b => b.status === 'อ่านจบ');
-                      if (list.length === 0) return null;
-
-                      const percentage = Math.round((readList.length / list.length) * 100);
-
-                      return (
-                        <div key={genre} className="space-y-1">
-                          <div className="flex justify-between text-xs text-slate-300">
-                            <span className="font-medium truncate max-w-[200px]">{genre}</span>
-                            <span>{readList.length} / {list.length} เล่ม ({percentage}%)</span>
-                          </div>
-                          <div className="h-2.5 w-full bg-slate-800 rounded-full overflow-hidden flex">
-                            <div 
-                              className="bg-violet-500" 
-                              style={{ width: `${(readList.length / (books.length || 1)) * 100}%` }}
-                            ></div>
-                            <div 
-                              className="bg-slate-700" 
-                              style={{ width: `${((list.length - readList.length) / (books.length || 1)) * 100}%` }}
-                            ></div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                    {books.length === 0 && (
-                      <p className="text-xs text-slate-500 text-center py-6">ไม่มีข้อมูลสำหรับการแสดงผลสถิติประเภท</p>
-                    )}
-                  </div>
-                </div>
-
-                {/* Cost/Efficiency Chart */}
-                <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl shadow-xl space-y-4">
-                  <h3 className="text-base font-bold text-slate-200 flex items-center gap-2">
-                    🎯 ประสิทธิภาพทางการเงินและการอ่าน (ROI Insights)
-                  </h3>
-                  <p className="text-xs text-slate-400">
-                    วิเคราะห์หาหนังสือ "คุ้มค่าเวลา" และ "เสียเปล่า" จากเรทติ้งและราคาต่อชั่วโมง
-                  </p>
-
-                  <div className="space-y-3 overflow-y-auto max-h-72 pr-1">
-                    {roiAnalysis.map(b => (
-                      <div key={b.id} className="p-3 bg-slate-950/60 rounded-xl border border-slate-800 flex justify-between items-center gap-4 text-xs">
-                        <div className="space-y-1 truncate flex-1">
-                          <p className="font-bold text-slate-200 truncate">{b.title}</p>
-                          <p className="text-[10px] text-slate-500">ประเภท: {b.genre}</p>
-                          <p className={`text-[10px] font-semibold ${
-                            b.insightText.includes('คุ้มค่าสุดยอด') ? 'text-emerald-400' :
-                            b.insightText.includes('เสียดายเงิน') ? 'text-rose-400' : 'text-slate-400'
-                          }`}>
-                            {b.insightText}
-                          </p>
-                        </div>
-                        <div className="text-right space-y-1 shrink-0 font-mono">
-                          <p className="text-slate-300">฿{b.costPerHour}/ชม.</p>
-                          <p className="text-slate-400">เรทติ้ง: {b.rating ? `${b.rating}/5` : 'N/A'}</p>
-                        </div>
-                      </div>
-                    ))}
-                    {books.length === 0 && (
-                      <p className="text-xs text-slate-500 text-center py-6">ยังไม่มีหนังสือที่จะประเมินความคุ้มค่า</p>
-                    )}
-                  </div>
-                </div>
-
-              </div>
-
-            </div>
-          )}
-
-          {/* =======================================================
-              TAB 2: MAIN BOOKS MANAGEMENT TABLE
-             ======================================================= */}
-          {activeTab === 'books' && (
-            <div className="space-y-6">
-              
-              {/* Filter Area & Search Container */}
-              <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl space-y-4 shadow-md">
-                <div className="flex flex-col md:flex-row gap-3">
-                  <div className="flex-1 relative">
-                    <span className="absolute left-3 top-2.5 text-slate-500">🔍</span>
-                    <input
-                      type="text"
-                      placeholder="ค้นหาชื่อหนังสือ, ผู้แต่ง, หรือบันทึกหมายเหตุ..."
-                      value={searchQuery}
-                      onChange={e => setSearchQuery(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-4 py-2 text-sm focus:outline-none focus:border-violet-500 text-slate-200"
-                    />
-                  </div>
-
-                  <div className="flex gap-2 overflow-x-auto pb-1 md:pb-0">
-                    <select
-                      value={selectedGenreFilter}
-                      onChange={e => setSelectedGenreFilter(e.target.value)}
-                      className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-violet-500 text-slate-200"
-                    >
-                      <option value="all">ทุกประเภทนิยาย/หนังสือ</option>
-                      {GENRES.map(g => (
-                        <option key={g} value={g}>{g}</option>
-                      ))}
-                    </select>
-
-                    <select
-                      value={selectedPublisherFilter}
-                      onChange={e => setSelectedPublisherFilter(e.target.value)}
-                      className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-violet-500 text-slate-200"
-                    >
-                      <option value="all">ทุกสำนักพิมพ์</option>
-                      {publishers.map(p => (
-                        <option key={p.id} value={p.id}>{p.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                {/* Smart One-Click Quick Filters */}
-                <div className="flex flex-wrap items-center gap-1.5 text-xs">
-                  <span className="text-slate-400 font-medium mr-1.5">🚀 ตัวกรองอัจฉริยะ (Smart Filters):</span>
-                  {[
-                    { id: 'all', label: 'ทั้งหมด' },
-                    { id: 'unread-fav', label: 'เล่มโปรดที่ยังไม่ได้อ่าน (ดอง)' },
-                    { id: 'uncompleted-hoard', label: 'หนังสือชุดที่ยังไม่ครบและดองอยู่' },
-                    { id: 'year-2026', label: 'เฉพาะปี 2026' },
-                    { id: 'novel', label: 'เน้นนิยาย & มังงะ' },
-                    { id: 'general-book', label: 'เน้นหนังสือทั่วไป' }
-                  ].map(btn => (
-                    <button
-                      key={btn.id}
-                      onClick={() => setSelectedFilter(btn.id)}
-                      className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
-                        selectedFilter === btn.id 
-                          ? 'bg-violet-600 text-white shadow-md' 
-                          : 'bg-slate-950 border border-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-                      }`}
-                    >
-                      {btn.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Table List Section */}
-              <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
-                <div className="p-4 border-b border-slate-800 flex justify-between items-center">
-                  <h3 className="text-base font-bold text-slate-200">
-                    📋 ตารางหนังสือหลัก ({filteredBooks.length} เล่ม)
-                  </h3>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => setShowAddPublisherModal(true)}
-                      className="bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 py-1.5 px-3 rounded-lg transition-all"
-                    >
-                      🎨 เพิ่มสำนักพิมพ์
-                    </button>
-                    <button
-                      onClick={() => setShowAddBookModal(true)}
-                      disabled={brainAdvice.systemLock}
-                      className={`text-xs py-1.5 px-3 rounded-lg font-semibold transition-all ${
-                        brainAdvice.systemLock
-                          ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
-                          : 'bg-violet-600 hover:bg-violet-700 text-white'
-                      }`}
-                    >
-                      ➕ เพิ่มหนังสือใหม่
-                    </button>
-                  </div>
-                </div>
-
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs border-collapse">
-                    <thead>
-                      <tr className="bg-slate-950 text-slate-400 border-b border-slate-800 font-semibold">
-                        <th className="p-4">ชื่อ / รายละเอียด</th>
-                        <th className="p-4">ผู้แต่ง</th>
-                        <th className="p-4">สำนักพิมพ์</th>
-                        <th className="p-4 text-center">จำนวนเล่มที่มี</th>
-                        <th className="p-4">ประเภท</th>
-                        <th className="p-4">สถานะ</th>
-                        <th className="p-4 text-right">ราคา</th>
-                        <th className="p-4 text-center">จัดการ</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-800/60">
-                      {filteredBooks.map(book => {
-                        const pub = getPublisher(book.publisherId);
-                        
-                        return (
-                          <tr key={book.id} className="hover:bg-slate-800/40 transition-colors">
-                            <td className="p-4">
-                              <div className="flex items-center gap-2">
-                                <button
-                                  onClick={() => {
-                                    // Toggle Favorite
-                                    setBooks(prev => prev.map(b => b.id === book.id ? { ...b, isFavorite: !b.isFavorite } : b));
-                                  }}
-                                  className="text-base"
-                                >
-                                  {book.isFavorite ? '⭐️' : '☆'}
-                                </button>
-                                <span 
-                                  className="font-bold text-slate-200 cursor-pointer hover:underline"
-                                  onClick={() => setSelectedBookForDetails(book)}
-                                >
-                                  {book.title}
-                                </span>
-                              </div>
-                              {book.note && (
-                                <p className="text-[10px] text-slate-500 ml-6 truncate max-w-[180px]" title={book.note}>
-                                  📝 {book.note}
-                                </p>
-                              )}
-                            </td>
-                            <td className="p-4 text-slate-300">{book.author || '-'}</td>
-                            <td className="p-4">
-                              <span 
-                                className="px-2 py-0.5 rounded text-[10px] font-bold"
-                                style={{ backgroundColor: `${pub.color}20`, color: pub.color }}
-                              >
-                                {pub.name}
-                              </span>
-                            </td>
-                            <td className="p-4 text-center text-slate-300">
-                              {book.volumeOwned} / {book.volumeTotal} เล่ม
-                              {book.volumeOwned < book.volumeTotal && (
-                                <span className="block text-[9px] text-rose-400 font-semibold">⚠️ ยังไม่ครบชุด</span>
-                              )}
-                            </td>
-                            <td className="p-4 text-slate-400">{book.genre}</td>
-                            <td className="p-4">
-                              <select
-                                value={book.status}
-                                onChange={(e) => {
-                                  // Live lifecycle dynamic updates
-                                  setBooks(prev => prev.map(b => b.id === book.id ? { ...b, status: e.target.value } : b));
-                                }}
-                                className={`px-2 py-1 rounded text-[10px] font-bold focus:outline-none bg-slate-950 border border-slate-800 ${
-                                  book.status === 'อ่านจบ' ? 'text-emerald-400' :
-                                  book.status === 'กำลังอ่าน' ? 'text-indigo-400' :
-                                  book.status === 'ดอง' ? 'text-amber-400' : 'text-slate-400'
-                                }`}
-                              >
-                                <option value="Wishlist">Wishlist</option>
-                                <option value="ดอง">ดอง</option>
-                                <option value="กำลังอ่าน">กำลังอ่าน</option>
-                                <option value="อ่านจบ">อ่านจบ</option>
-                                <option value="พักไว้">พักไว้</option>
-                                <option value="อ่านซ้ำ">อ่านซ้ำ</option>
-                                <option value="ขายแล้ว">ขายแล้ว</option>
-                              </select>
-                            </td>
-                            <td className="p-4 text-right font-mono text-slate-200">฿{book.cost}</td>
-                            <td className="p-4">
-                              <div className="flex justify-center gap-1.5">
-                                <button
-                                  onClick={() => setSelectedBookForDetails(book)}
-                                  className="p-1.5 bg-slate-800 hover:bg-slate-700 rounded text-[10px] text-slate-300"
-                                  title="ดูรายละเอียดเชิงลึก / บันทึกประเด็น"
-                                >
-                                  👁️ บันทึก
-                                </button>
-                                <button
-                                  onClick={() => handleDeleteBook(book.id)}
-                                  className="p-1.5 bg-rose-600/20 hover:bg-rose-600/30 text-rose-400 rounded text-[10px]"
-                                  title="ย้ายสถานะเป็นขายแล้ว (ไม่เสียสถิติการเงิน)"
-                                >
-                                  📦 คัดออก
-                                </button>
-                                <button
-                                  onClick={() => handlePermanentDeleteBook(book.id)}
-                                  className="p-1.5 bg-slate-950 hover:bg-slate-900 text-slate-500 rounded text-[10px]"
-                                  title="ลบถาวรออกจากระบบ"
-                                >
-                                  ❌
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                      {filteredBooks.length === 0 && (
-                        <tr>
-                          <td colSpan="8" className="p-8 text-center text-slate-500">
-                            ไม่พบหนังสือที่สอดคล้องกับเงื่อนไขการค้นหา/ตัวกรองของคุณในขณะนี้
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-            </div>
-          )}
-
-          {/* =======================================================
-              TAB 3: SERIES & UNCOMPLETED SETS
-             ======================================================= */}
-          {activeTab === 'series' && (
-            <div className="space-y-6">
-              <div className="flex justify-between items-center bg-slate-900 border border-slate-800 p-5 rounded-2xl shadow-md">
-                <div>
-                  <h3 className="text-lg font-bold text-slate-200">⛓️ การวิเคราะห์และติดตามหนังสือชุด (Series Table)</h3>
-                  <p className="text-xs text-slate-400 mt-1">
-                    คำนวณสัดส่วนเล่มที่มีเทียบกับยอดรวมในตลาด เพื่อเตรียมจัดซื้อเก็บให้ครบสมบูรณ์
-                  </p>
-                </div>
-                <button
-                  onClick={() => setShowAddSeriesModal(true)}
-                  className="bg-violet-600 hover:bg-violet-700 text-xs text-white font-semibold py-2 px-4 rounded-xl shadow-md transition-all"
-                >
-                  ➕ เพิ่มซีรีส์ใหม่
-                </button>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {series.map(s => {
-                  const associatedBooks = books.filter(b => s.bookIds.includes(b.id));
-                  const owned = associatedBooks.reduce((sum, b) => sum + (b.volumeOwned || 0), 0);
-                  const total = associatedBooks.reduce((sum, b) => sum + (b.volumeTotal || 0), 0);
-                  const percent = total > 0 ? Math.round((owned / total) * 100) : 0;
-
-                  return (
-                    <div key={s.id} className="bg-slate-900 border border-slate-800 p-5 rounded-2xl space-y-3 shadow-lg">
-                      <div className="flex justify-between items-center">
-                        <h4 className="font-bold text-slate-200">{s.name}</h4>
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                          percent === 100 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'
-                        }`}>
-                          {percent === 100 ? 'ครบชุดบริบูรณ์ 🎉' : `ขาดอีก ${total - owned} เล่ม`}
-                        </span>
-                      </div>
-
-                      <div className="w-full bg-slate-950 h-3 rounded-full overflow-hidden">
-                        <div 
-                          className="bg-gradient-to-r from-violet-500 to-indigo-500 h-full rounded-full"
-                          style={{ width: `${percent}%` }}
-                        ></div>
-                      </div>
-
-                      <div className="flex justify-between text-xs text-slate-400">
-                        <span>สัดส่วนเล่มสะสม: {owned} / {total} เล่ม</span>
-                        <span>ความคืบหน้า: {percent}%</span>
-                      </div>
-
-                      {/* Associated books list inside this series */}
-                      <div className="space-y-1.5 pt-2">
-                        <p className="text-[10px] text-slate-500 uppercase tracking-widest font-semibold">เล่มในสังกัดชุดนี้:</p>
-                        {associatedBooks.map(b => (
-                          <div key={b.id} className="flex justify-between text-xs p-1.5 bg-slate-950/60 rounded border border-slate-800">
-                            <span className="text-slate-300 font-medium">{b.title}</span>
-                            <span className="text-slate-400">มี {b.volumeOwned} เล่ม</span>
-                          </div>
-                        ))}
-                        {associatedBooks.length === 0 && (
-                          <p className="text-xs text-slate-600 italic">ไม่มีหนังสือเชื่อมโยงในซีรีส์นี้ (แก้ไขข้อมูลหนังสือเพื่อจับคู่ชื่อชุด)</p>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-                {series.length === 0 && (
-                  <div className="col-span-2 bg-slate-900 border border-slate-800 p-8 rounded-2xl text-center text-slate-500">
-                    ยังไม่มีข้อมูลชุดซีรีส์ กรุณากดปุ่มเพื่อสร้างซีรีส์และกรอกชื่อหนังสือเพื่อผูกความสัมพันธ์
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* =======================================================
-              TAB 4: GOALS TABLE (TARGETS)
-             ======================================================= */}
-          {activeTab === 'goals' && (
-            <div className="space-y-6">
-              <div className="flex justify-between items-center bg-slate-900 border border-slate-800 p-5 rounded-2xl shadow-md">
-                <div>
-                  <h3 className="text-lg font-bold text-slate-200">🎯 ตารางเป้าหมายการอ่านประจำปี/รายเดือน (Goals Table)</h3>
-                  <p className="text-xs text-slate-400 mt-1">
-                    ตั้งเป้าหมายประจำปีหรือเป้าหมายรายเดือน และคำนวณ % ความสำเร็จโดยดึงสถิติจากเล่มที่ "อ่านจบ" โดยอัตโนมัติ
-                  </p>
-                </div>
-                <button
-                  onClick={() => setShowAddGoalModal(true)}
-                  className="bg-violet-600 hover:bg-violet-700 text-xs text-white font-semibold py-2 px-4 rounded-xl shadow-md transition-all"
-                >
-                  ➕ เพิ่มเป้าหมายใหม่
-                </button>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {goals.map(g => {
-                  // Filter books that are read in the target month/year
-                  const completedInGoal = books.filter(b => {
-                    if (b.status !== 'อ่านจบ') return false;
-                    if (!b.endDate) return false;
-                    
-                    const finishDate = new Date(b.endDate);
-                    const finishYear = finishDate.getFullYear();
-                    const finishMonth = finishDate.getMonth() + 1;
-
-                    // Match logic
-                    if (g.month > 0) {
-                      return finishYear === g.year && finishMonth === g.month;
-                    }
-                    return finishYear === g.year;
-                  });
-
-                  const countCompleted = completedInGoal.length;
-                  const progressPercent = Math.min(Math.round((countCompleted / g.targetBooks) * 100), 100);
-
-                  return (
-                    <div key={g.id} className="bg-slate-900 border border-slate-800 p-5 rounded-2xl space-y-3 shadow-lg relative overflow-hidden">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <h4 className="font-bold text-slate-200">{g.label}</h4>
-                          <p className="text-[10px] text-slate-500 mt-0.5">
-                            ระยะเวลา: {g.month > 0 ? `เดือนที่ ${g.month}/` : ''}ปี {g.year}
-                          </p>
-                        </div>
-                        <span className="text-2xl font-black text-slate-700">🎯</span>
-                      </div>
-
-                      <div className="pt-2">
-                        <div className="flex justify-between text-xs text-slate-300 font-semibold mb-1">
-                          <span>ความสำเร็จการอ่าน</span>
-                          <span className="text-violet-400">{countCompleted} / {g.targetBooks} เล่ม ({progressPercent}%)</span>
-                        </div>
-                        <div className="w-full bg-slate-950 h-3 rounded-full overflow-hidden">
-                          <div 
-                            className="bg-gradient-to-r from-emerald-500 to-indigo-500 h-full rounded-full"
-                            style={{ width: `${progressPercent}%` }}
-                          ></div>
-                        </div>
-                      </div>
-
-                      {countCompleted >= g.targetBooks && (
-                        <div className="p-2 bg-emerald-500/10 rounded-xl border border-emerald-500/20 text-[11px] text-emerald-400 font-semibold text-center mt-2">
-                          🎉 พิชิตเป้าหมายสำเร็จแล้ว ยอดเยี่ยมที่สุด!
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* =======================================================
-              TAB 5: DETAILED HEATMAP & LOGGING
-             ======================================================= */}
-          {activeTab === 'heatmap' && (
-            <div className="space-y-6">
-              <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl shadow-md">
-                <h3 className="text-lg font-bold text-slate-200">🔥 บันทึกความทุ่มเทเพื่อหนังสือ</h3>
-                <p className="text-xs text-slate-400 mt-1">
-                  กรอกยอดจำนวนหน้าที่คุณอ่านสะสมในวันนั้นๆ เพื่อเปลี่ยนสีตารางรังผึ้งเป็นสีเขียวเข้ม ยิ่งอ่านเยอะสียิ่งเข้มข้น!
-                </p>
-
-                {/* Quick Logging Form */}
-                <form 
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    const form = e.target;
-                    const date = form.date.value;
-                    const pages = form.pages.value;
-                    const hours = form.hours.value;
-                    handleLogProgress(date, pages, hours);
-                    form.reset();
-                  }}
-                  className="grid grid-cols-1 sm:grid-cols-4 gap-3 mt-4"
-                >
-                  <input
-                    type="date"
-                    name="date"
-                    required
-                    defaultValue={new Date().toISOString().split('T')[0]}
-                    className="bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-slate-200 focus:outline-none focus:border-violet-500"
-                  />
-                  <input
-                    type="number"
-                    name="pages"
-                    required
-                    placeholder="จำนวนหน้าที่อ่านจบ (หน้า)"
-                    className="bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-slate-200 focus:outline-none focus:border-violet-500"
-                  />
-                  <input
-                    type="number"
-                    name="hours"
-                    required
-                    step="0.5"
-                    placeholder="เวลาที่ใช้ในการอ่าน (ชม.)"
-                    className="bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-slate-200 focus:outline-none focus:border-violet-500"
-                  />
-                  <button
-                    type="submit"
-                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl py-2.5 transition-all"
-                  >
-                    🔥 บันทึกการอ่านวันนี้
-                  </button>
-                </form>
-              </div>
-
-              {renderHeatmap()}
-            </div>
-          )}
-
-          {/* =======================================================
-              TAB 6: PROFILE & LEVEL 5 & 10 MULTI-DIMENSIONAL REWARD CARD
-             ======================================================= */}
-          {activeTab === 'profile' && (
-            <div className="space-y-6">
-              
-              <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl shadow-md space-y-4">
-                <h3 className="text-lg font-bold text-slate-200">🎖️ บัตรสะสมพลังนักอ่าน (Reading Gamification Passport)</h3>
-                <p className="text-xs text-slate-400">
-                  ระบบปลดล็อกความสามารถอัตโนมัติ! เมื่อคุณไต่ระดับถึงเล่มที่กำหนด บัตรของคุณจะเปลี่ยนรูปแบบการแสดงภาพและรายละเอียด
-                </p>
-
-                <div className="p-3 bg-slate-950/60 rounded-xl border border-slate-800/80 text-xs text-slate-400 flex flex-wrap gap-4 justify-between">
-                  <div>
-                    <span className="text-slate-300 font-bold">เลเวลปัจจุบันของคุณ:</span>{' '}
-                    <span className="text-violet-400 font-extrabold text-sm">LV.{stats.level}</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-300 font-bold">เงื่อนไขการอัปเกรดการ์ด:</span>
-                    <ul className="list-disc list-inside mt-1 space-y-0.5 text-[10px]">
-                      <li>เลเวล 1 - 4: บัตรมาตรฐานแสดงชื่อและรายละเอียดชีวประวัติ</li>
-                      <li>เลเวล 5 - 9: บัตรจะถูก อัปเกรด เป็นแบบรูปภาพเต็มใบ</li>
-                      <li>เลเวล 10 ขึ้นไป: การ์ดขยายรูปแบบ แบ่งครึ่งภาพซ้าย-ขวา สุดล้ำสมัย</li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-
-              {/* DYNAMIC CARD RENDERING DEPENDING ON LEVEL */}
-              <div className="flex justify-center py-4">
-                
-                {/* LEVEL 10+: SPLIT HALF AND HALF CARD */}
-                {stats.level >= 10 ? (
-                  <div className="w-full max-w-lg bg-slate-900 border-2 border-violet-500 rounded-3xl overflow-hidden shadow-2xl flex flex-col sm:flex-row min-h-[300px] transition-all transform hover:scale-[1.02]">
-                    <div 
-                      className="w-full sm:w-1/2 h-52 sm:h-auto bg-cover bg-center relative"
-                      style={{ backgroundImage: `url(${userProfile.photoLeft})` }}
-                    >
-                      <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent"></div>
-                      <div className="absolute bottom-4 left-4">
-                        <span className="bg-violet-600 text-white text-[10px] font-black px-2 py-1 rounded-full uppercase tracking-wider">
-                          ELITE DISCOVERY
-                        </span>
-                      </div>
-                    </div>
-
-                    <div 
-                      className="w-full sm:w-1/2 h-52 sm:h-auto bg-cover bg-center relative"
-                      style={{ backgroundImage: `url(${userProfile.photoRight})` }}
-                    >
-                      <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-transparent"></div>
-                      <div className="absolute bottom-4 left-4 right-4 z-10 text-left">
-                        <p className="text-xs text-violet-400 font-black">LEGENDARY READER</p>
-                        <h4 className="text-xl font-black text-white">{userProfile.name}</h4>
-                        <p className="text-[10px] text-slate-300 italic mt-1">{userProfile.bio}</p>
-                        
-                        <div className="mt-3 bg-slate-900/90 p-2.5 rounded-xl border border-slate-700/60 flex justify-between text-[10px] font-mono">
-                          <div>
-                            <p className="text-slate-400">อ่านแล้ว</p>
-                            <p className="font-bold text-emerald-400">{stats.read} เล่ม</p>
-                          </div>
-                          <div>
-                            <p className="text-slate-400">ดองคลัง</p>
-                            <p className="font-bold text-amber-400">{stats.hoard} เล่ม</p>
-                          </div>
-                          <div>
-                            <p className="text-slate-400">ระดับพลัง</p>
-                            <p className="font-bold text-violet-400">LV.{stats.level}</p>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ) : 
-                
-                /* LEVEL 5 - 9: FULL BACKDROP IMAGE CARD */
-                stats.level >= 5 ? (
-                  <div 
-                    className="w-full max-w-md h-96 rounded-3xl bg-cover bg-center relative overflow-hidden shadow-2xl transition-all transform hover:scale-[1.02] border border-slate-700"
-                    style={{ backgroundImage: `url(${userProfile.photoLeft})` }}
-                  >
-                    <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/50 to-transparent"></div>
-                    <div className="absolute top-4 right-4 bg-gradient-to-r from-pink-500 to-violet-600 text-white text-xs font-bold px-3 py-1 rounded-full shadow-md">
-                      LEVEL {stats.level} RANGER
-                    </div>
-
-                    <div className="absolute bottom-0 inset-x-0 p-6 space-y-3">
-                      <div>
-                        <h4 className="text-2xl font-black text-white tracking-wide">{userProfile.name}</h4>
-                        <p className="text-xs text-slate-300 italic mt-1">{userProfile.bio}</p>
-                      </div>
-
-                      <div className="bg-slate-950/80 p-3 rounded-2xl border border-slate-800/80 flex justify-between text-xs font-mono">
-                        <div>
-                          <p className="text-slate-500 text-[10px]">READ</p>
-                          <p className="font-extrabold text-emerald-400">{stats.read} เล่ม</p>
-                        </div>
-                        <div>
-                          <p className="text-slate-500 text-[10px]">HOARD</p>
-                          <p className="font-extrabold text-amber-400">{stats.hoard} เล่ม</p>
-                        </div>
-                        <div>
-                          <p className="text-slate-500 text-[10px]">TOTAL VALUE</p>
-                          <p className="font-extrabold text-blue-400">฿{stats.totalCost}</p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ) : 
-                
-                /* LEVEL 1 - 4: BASIC STANDARD CARD */
-                (
-                  <div className="w-full max-w-sm bg-slate-900 border border-slate-800 p-6 rounded-3xl space-y-4 shadow-xl text-center relative overflow-hidden">
-                    <div className="absolute top-0 right-0 w-24 h-24 bg-violet-600/10 rounded-full blur-xl"></div>
-                    <div className="w-20 h-20 bg-slate-800 rounded-full mx-auto flex items-center justify-center font-bold text-3xl border border-slate-700 shadow-md">
-                      📖
-                    </div>
-                    <div>
-                      <h4 className="text-lg font-bold text-slate-200">{userProfile.name}</h4>
-                      <p className="text-xs text-slate-400 mt-1 italic">{userProfile.bio}</p>
-                    </div>
-
-                    <div className="grid grid-cols-3 gap-2 py-2 border-y border-slate-800 text-xs">
-                      <div>
-                        <p className="text-slate-500">อ่านจบ</p>
-                        <p className="font-bold text-emerald-400">{stats.read} เล่ม</p>
-                      </div>
-                      <div>
-                        <p className="text-slate-500">ดองค้าง</p>
-                        <p className="font-bold text-amber-400">{stats.hoard} เล่ม</p>
-                      </div>
-                      <div>
-                        <p className="text-slate-500">ระดับ</p>
-                        <p className="font-bold text-violet-400">LV.{stats.level}</p>
-                      </div>
-                    </div>
-
-                    <div className="text-[10px] text-slate-500 italic">
-                      สะสมประวัติให้มากยิ่งขึ้นเพื่อยกระดับสู่บัตรผู้สำเร็จขั้นสูง!
-                    </div>
-                  </div>
-                )}
-
-              </div>
-
-              {/* Edit Profile Form */}
-              <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl shadow-md space-y-4">
-                <h4 className="text-sm font-bold text-slate-300">⚙️ ตั้งค่ารายละเอียดของบัตรสะสมพลัง</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-                  <div className="space-y-1">
-                    <label className="text-slate-400">ชื่อนักสะสมหนังสือ</label>
-                    <input
-                      type="text"
-                      value={userProfile.name}
-                      onChange={e => setUserProfile(prev => ({ ...prev, name: e.target.value }))}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-200 focus:outline-none"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-slate-400">คำสัจจะนักอ่าน (Bio)</label>
-                    <input
-                      type="text"
-                      value={userProfile.bio}
-                      onChange={e => setUserProfile(prev => ({ ...prev, bio: e.target.value }))}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-200 focus:outline-none"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-slate-400">รูปภาพใบหน้าหลัก / ด้านซ้าย (URL)</label>
-                    <input
-                      type="text"
-                      value={userProfile.photoLeft}
-                      onChange={e => setUserProfile(prev => ({ ...prev, photoLeft: e.target.value }))}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-200 focus:outline-none text-[11px]"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-slate-400">รูปภาพประกอบรอง / ด้านขวา (URL)</label>
-                    <input
-                      type="text"
-                      value={userProfile.photoRight}
-                      onChange={e => setUserProfile(prev => ({ ...prev, photoRight: e.target.value }))}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-200 focus:outline-none text-[11px]"
-                    />
-                  </div>
-                </div>
-              </div>
-
-            </div>
-          )}
-
-        </main>
-      </div>
-
-      {/* =======================================================
-          MODAL: ADD NEW BOOK
-         ======================================================= */}
-      {showAddBookModal && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 w-full max-w-lg rounded-2xl overflow-hidden shadow-2xl">
-            <div className="p-4 bg-slate-950 border-b border-slate-800 flex justify-between items-center">
-              <h3 className="font-bold text-slate-200 text-sm">➕ กรอกข้อมูลหนังสือเล่มใหม่</h3>
-              <button 
-                onClick={() => setShowAddBookModal(false)}
-                className="text-slate-400 hover:text-slate-200"
-              >
-                ✕
-              </button>
-            </div>
-
-            <form onSubmit={handleAddBook} className="p-4 space-y-4 max-h-[75vh] overflow-y-auto text-xs text-left">
-              
-              <div className="space-y-1">
-                <label className="text-slate-400 font-semibold">ชื่อหนังสือ *</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="กรอกชื่อหนังสือ..."
-                  value={newBook.title}
-                  onChange={e => setNewBook(prev => ({ ...prev, title: e.target.value }))}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-200 focus:outline-none focus:border-violet-500"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="text-slate-400">ผู้แต่ง</label>
-                  <input
-                    type="text"
-                    placeholder="กรอกชื่อผู้แต่ง..."
-                    value={newBook.author}
-                    onChange={e => setNewBook(prev => ({ ...prev, author: e.target.value }))}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-200 focus:outline-none focus:border-violet-500"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-slate-400">ประเภท</label>
-                  <select
-                    value={newBook.genre}
-                    onChange={e => setNewBook(prev => ({ ...prev, genre: e.target.value }))}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-200 focus:outline-none focus:border-violet-500"
-                  >
-                    {GENRES.map(g => (
-                      <option key={g} value={g}>{g}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="text-slate-400">สำนักพิมพ์</label>
-                  <select
-                    value={newBook.publisherId}
-                    onChange={e => setNewBook(prev => ({ ...prev, publisherId: e.target.value }))}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-200 focus:outline-none focus:border-violet-500"
-                  >
-                    {publishers.map(p => (
-                      <option key={p.id} value={p.id}>{p.name}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="space-y-1">
-                  <label className="text-slate-400">สถานะเริ่มต้น</label>
-                  <select
-                    value={newBook.status}
-                    onChange={e => setNewBook(prev => ({ ...prev, status: e.target.value }))}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-200 focus:outline-none focus:border-violet-500"
-                  >
-                    <option value="Wishlist">Wishlist</option>
-                    <option value="ดอง">ดอง (ยังไม่อ่าน)</option>
-                    <option value="กำลังอ่าน">กำลังอ่าน</option>
-                    <option value="อ่านจบ">อ่านจบ</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="text-slate-400">จำนวนเล่มที่มี</label>
-                  <input
-                    type="number"
-                    min="1"
-                    value={newBook.volumeOwned}
-                    onChange={e => setNewBook(prev => ({ ...prev, volumeOwned: e.target.value }))}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-200 focus:outline-none focus:border-violet-500"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-slate-400">จำนวนเล่มรวมของชุด</label>
-                  <input
-                    type="number"
-                    min="1"
-                    value={newBook.volumeTotal}
-                    onChange={e => setNewBook(prev => ({ ...prev, volumeTotal: e.target.value }))}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-200 focus:outline-none focus:border-violet-500"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-3 gap-3">
-                <div className="space-y-1">
-                  <label className="text-slate-400">ราคาซื้อ (บาท)</label>
-                  <input
-                    type="number"
-                    value={newBook.cost}
-                    onChange={e => setNewBook(prev => ({ ...prev, cost: e.target.value }))}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-200 focus:outline-none focus:border-violet-500"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-slate-400">คะแนนความพึงพอใจ</label>
-                  <input
-                    type="number"
-                    min="0"
-                    max="5"
-                    step="0.5"
-                    value={newBook.rating}
-                    onChange={e => setNewBook(prev => ({ ...prev, rating: e.target.value }))}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-200 focus:outline-none focus:border-violet-500"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-slate-400">เวลาที่ใช้อ่าน (ชม.)</label>
-                  <input
-                    type="number"
-                    value={newBook.readingTime}
-                    onChange={e => setNewBook(prev => ({ ...prev, readingTime: e.target.value }))}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-200 focus:outline-none focus:border-violet-500"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-slate-400">หมายเหตุเพิ่มเติม</label>
-                <textarea
-                  placeholder="กรอกสิ่งที่พบหรือข้อคิดเห็น..."
-                  value={newBook.note}
-                  onChange={e => setNewBook(prev => ({ ...prev, note: e.target.value }))}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-200 focus:outline-none focus:border-violet-500 h-16"
-                />
-              </div>
-
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  id="modal-fav"
-                  checked={newBook.isFavorite}
-                  onChange={e => setNewBook(prev => ({ ...prev, isFavorite: e.target.checked }))}
-                  className="w-4 h-4 text-violet-600 border-slate-800 rounded focus:ring-violet-500"
-                />
-                <label htmlFor="modal-fav" className="text-slate-300 font-medium">ทำเครื่องหมายเป็นเล่มโปรด ⭐</label>
-              </div>
-
-              <div className="pt-2 flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setShowAddBookModal(false)}
-                  className="w-1/2 bg-slate-800 hover:bg-slate-700 text-slate-300 py-2.5 rounded-xl transition-all"
-                >
-                  ยกเลิก
-                </button>
-                <button
-                  type="submit"
-                  className="w-1/2 bg-violet-600 hover:bg-violet-700 text-white font-bold py-2.5 rounded-xl transition-all shadow-md"
-                >
-                  บันทึกเข้าคลัง
-                </button>
-              </div>
-
-            </form>
+          <div class="bg-slate-900 border border-slate-800/80 p-4 rounded-2xl shadow-lg relative overflow-hidden group">
+            <p class="text-[11px] font-medium text-slate-400">งบประมาณที่จ่าย</p>
+            <h3 id="stat-total-cost" class="text-2xl md:text-3xl font-extrabold text-blue-400 mt-1">฿0</h3>
+            <p class="text-[9px] text-slate-500 mt-1">คำนวณอัตราความคุ้มค่า</p>
+            <div class="absolute right-3 bottom-3 text-slate-800/40 text-4xl font-bold"><i class="fa-solid fa-wallet"></i></div>
+          </div>
+
+          <div class="bg-slate-900 border border-slate-800/80 p-4 rounded-2xl shadow-lg relative overflow-hidden group">
+            <p class="text-[11px] font-medium text-slate-400">เวลาอ่านทั้งหมด</p>
+            <h3 id="stat-total-hours" class="text-2xl md:text-3xl font-extrabold text-violet-400 mt-1">0 ชม.</h3>
+            <p class="text-[9px] text-slate-500 mt-1">คำนวณความเร็วเฉลี่ย</p>
+            <div class="absolute right-3 bottom-3 text-slate-800/40 text-4xl font-bold"><i class="fa-solid fa-clock"></i></div>
           </div>
         </div>
-      )}
 
-      {/* =======================================================
-          MODAL: ADD NEW PUBLISHER
-         ======================================================= */}
-      {showAddPublisherModal && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 w-full max-w-md rounded-2xl overflow-hidden shadow-2xl">
-            <div className="p-4 bg-slate-950 border-b border-slate-800 flex justify-between items-center">
-              <h3 className="font-bold text-slate-200 text-sm">🎨 เพิ่มสำนักพิมพ์ใหม่</h3>
-              <button onClick={() => setShowAddPublisherModal(false)} className="text-slate-400 hover:text-slate-200">✕</button>
+        <!-- Analytical Graphs Row -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          
+          <!-- Buying Behavior Graph (Book vs Novel) -->
+          <div class="bg-slate-900 border border-slate-800 p-5 rounded-2xl space-y-4 shadow-xl">
+            <h4 class="text-xs font-bold text-slate-300 uppercase tracking-widest flex items-center gap-2">
+              <i class="fa-solid fa-money-bill-trend-up text-pink-400"></i>
+              <span>การเงินการซื้อหนังสือ (Book vs Novel Buying)</span>
+            </h4>
+            <div class="h-4 w-full bg-slate-800 rounded-full overflow-hidden flex">
+              <div id="chart-novel-bar" class="bg-gradient-to-r from-pink-500 to-rose-500 transition-all duration-500" style="width: 50%;"></div>
+              <div id="chart-book-bar" class="bg-gradient-to-r from-indigo-500 to-sky-400 transition-all duration-500" style="width: 50%;"></div>
             </div>
-            <form onSubmit={handleAddPublisher} className="p-4 space-y-4 text-xs text-left">
-              <div className="space-y-1">
-                <label className="text-slate-400">ชื่อสำนักพิมพ์ *</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="เช่น สยามอินเตอร์, สถาพร..."
-                  value={newPub.name}
-                  onChange={e => setNewPub(prev => ({ ...prev, name: e.target.value }))}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-200 focus:outline-none"
-                />
+            <div class="grid grid-cols-2 gap-4 text-xs pt-1">
+              <div>
+                <p class="text-pink-400 font-semibold flex items-center gap-1.5">
+                  <span class="w-2.5 h-2.5 bg-pink-500 rounded-full"></span>
+                  <span>นิยาย / มังงะ</span>
+                </p>
+                <p id="cost-novel-label" class="text-lg font-bold text-slate-200">฿0</p>
+                <p id="count-novel-label" class="text-[10px] text-slate-500">0 เล่ม</p>
               </div>
-              <div className="space-y-1">
-                <label className="text-slate-400">สีของสำนักพิมพ์ (สำหรับกราฟ/สติกเกอร์)</label>
-                <input
-                  type="color"
-                  value={newPub.color}
-                  onChange={e => setNewPub(prev => ({ ...prev, color: e.target.value }))}
-                  className="w-full h-10 bg-slate-950 border border-slate-800 rounded-xl p-1 focus:outline-none cursor-pointer"
-                />
+              <div>
+                <p class="text-indigo-400 font-semibold flex items-center gap-1.5">
+                  <span class="w-2.5 h-2.5 bg-indigo-500 rounded-full"></span>
+                  <span>หนังสือทั่วไป</span>
+                </p>
+                <p id="cost-book-label" class="text-lg font-bold text-slate-200">฿0</p>
+                <p id="count-book-label" class="text-[10px] text-slate-500">0 เล่ม</p>
               </div>
-              <button
-                type="submit"
-                className="w-full bg-violet-600 hover:bg-violet-700 text-white font-bold py-2.5 rounded-xl transition-all"
+            </div>
+            <div id="financial-advice-box" class="p-3 bg-slate-950/60 border border-slate-800/80 rounded-xl text-[11px] text-slate-400">
+              กำลังประมวลผลข้อมูลการอุดหนุนเพื่อประเมิน...
+            </div>
+          </div>
+
+          <!-- Proportion: Read vs Hoard -->
+          <div class="bg-slate-900 border border-slate-800 p-5 rounded-2xl flex flex-col justify-between shadow-xl">
+            <h4 class="text-xs font-bold text-slate-300 uppercase tracking-widest flex items-center gap-2">
+              <i class="fa-solid fa-chart-donut text-emerald-400"></i>
+              <span>สัดส่วนกองดอง VS อ่านจบ</span>
+            </h4>
+            <div class="my-5 flex justify-center relative items-center">
+              <svg width="130" height="130" viewBox="0 0 36 36" class="transform -rotate-90">
+                <circle cx="18" cy="18" r="15.915" fill="none" stroke="#1E293B" strokeWidth="3" />
+                <circle id="donut-progress-circle" cx="18" cy="18" r="15.915" fill="none" stroke="#10B981" strokeWidth="3.2" strokeDasharray="0 100" strokeDashoffset="100" class="transition-all duration-700" />
+              </svg>
+              <div class="absolute text-center">
+                <p class="text-[9px] text-slate-500">อัตราสำเร็จ</p>
+                <h4 id="donut-percentage-text" class="text-xl font-bold text-emerald-400">0%</h4>
+              </div>
+            </div>
+            <div class="flex justify-around text-[11px] text-slate-300">
+              <div class="flex items-center gap-1.5">
+                <span class="w-2.5 h-2.5 bg-emerald-500 rounded-full"></span>
+                <span>อ่านสำเร็จ</span>
+              </div>
+              <div class="flex items-center gap-1.5">
+                <span class="w-2.5 h-2.5 bg-amber-500 rounded-full"></span>
+                <span>ดองสะสม</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Close to Complete Series -->
+          <div class="bg-slate-900 border border-slate-800 p-5 rounded-2xl flex flex-col justify-between shadow-xl">
+            <h4 class="text-xs font-bold text-slate-300 uppercase tracking-widest flex items-center gap-2">
+              <i class="fa-solid fa-network-wired text-indigo-400"></i>
+              <span>ซีรีส์ชุดที่ใกล้จะสำเร็จ</span>
+            </h4>
+            <div id="near-complete-series-list" class="space-y-3 my-3 flex-1 overflow-y-auto max-h-[160px] pr-1">
+              <p class="text-xs text-slate-500 italic text-center py-6">ไม่มีประวัติซีรีส์สะสมค้างคาอยู่</p>
+            </div>
+            <button onclick="switchTab('series')" class="text-center text-xs text-indigo-400 font-semibold hover:underline">
+              ดูตารางซีรีส์ทั้งหมด →
+            </button>
+          </div>
+
+        </div>
+
+        <!-- Heatmap Integration Block -->
+        <div id="heatmap-panel-container" class="space-y-3">
+          <!-- Dynamically created calendar goes here -->
+        </div>
+
+        <!-- ROI and Efficiency Analytics -->
+        <div class="bg-slate-900 border border-slate-800 p-5 rounded-2xl shadow-xl space-y-4">
+          <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+            <div>
+              <h4 class="text-xs font-bold text-slate-300 uppercase tracking-widest flex items-center gap-2">
+                <i class="fa-solid fa-brain text-amber-400"></i>
+                <span>วิเคราะห์ความคุ้มค่าทางการเงิน (ROI Reading Metrics)</span>
+              </h4>
+              <p class="text-[11px] text-slate-500">วิเคราะห์เพื่อจำแนกหนังสือที่ "คุ้มค่าเงินสูงสุด" และ "ความพึงพอใจแย่สุด"</p>
+            </div>
+            <span class="text-[9px] bg-slate-800 text-slate-400 py-1 px-2.5 rounded font-bold uppercase tracking-wider">Advanced Analyzer</span>
+          </div>
+
+          <div id="roi-analysis-list" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <!-- Dynamically populated analysis -->
+            <p class="col-span-2 text-xs text-slate-500 italic text-center py-6">รออัปโหลดข้อมูลหนังสือเพื่อประมวลผลดัชนี ROI</p>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- ==========================================================
+          TAB 2: BOOKS LIST TABLE
+         ========================================================== -->
+      <section id="tab-books" class="tab-content space-y-6 hidden">
+        
+        <!-- Search & Advanced Filter Controls -->
+        <div class="bg-slate-900 border border-slate-800 p-5 rounded-2xl space-y-4 shadow-xl">
+          <div class="flex flex-col md:flex-row gap-3">
+            <div class="flex-1 relative">
+              <span class="absolute left-3.5 top-3 text-slate-500"><i class="fa-solid fa-magnifying-glass"></i></span>
+              <input
+                id="search-input"
+                oninput="renderBookTable()"
+                type="text"
+                placeholder="ค้นหาชื่อเรื่อง, ผู้แต่ง, หรือคำอธิบาย..."
+                class="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-xs focus:outline-none focus:border-violet-500 text-slate-200"
+              />
+            </div>
+            <div class="flex gap-2">
+              <select
+                id="filter-genre"
+                onchange="renderBookTable()"
+                class="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-violet-500 text-slate-200"
               >
+                <option value="all">ทุกประเภทหนังสือ</option>
+              </select>
+              <select
+                id="filter-publisher"
+                onchange="renderBookTable()"
+                class="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-violet-500 text-slate-200"
+              >
+                <option value="all">ทุกสำนักพิมพ์</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Smart Quick Filters -->
+          <div class="flex flex-wrap items-center gap-1.5 text-xs">
+            <span class="text-slate-400 font-semibold mr-1.5">🚀 ตัวกรองด่วน:</span>
+            <button onclick="setSmartFilter('all')" class="quick-filter-btn active bg-violet-600 text-white px-3 py-1.5 rounded-lg font-bold">ทั้งหมด</button>
+            <button onclick="setSmartFilter('favorite')" class="quick-filter-btn bg-slate-950 border border-slate-800 text-slate-400 px-3 py-1.5 rounded-lg font-bold hover:text-slate-200">เล่มโปรดที่ยังไม่ได้อ่าน</button>
+            <button onclick="setSmartFilter('uncompleted')" class="quick-filter-btn bg-slate-950 border border-slate-800 text-slate-400 px-3 py-1.5 rounded-lg font-bold hover:text-slate-200">หนังสือชุดที่ดองและไม่ครบ</button>
+            <button onclick="setSmartFilter('year-2026')" class="quick-filter-btn bg-slate-950 border border-slate-800 text-slate-400 px-3 py-1.5 rounded-lg font-bold hover:text-slate-200">เฉพาะปี 2026</button>
+          </div>
+        </div>
+
+        <!-- Master Books Table -->
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
+          <div class="p-4 bg-slate-950/60 border-b border-slate-800 flex justify-between items-center">
+            <h3 class="text-xs font-bold uppercase text-slate-300 tracking-wider">บัญชีคลังหนังสือทั้งหมด</h3>
+            <div class="flex gap-2">
+              <button onclick="openModal('add-pub-modal')" class="text-xs bg-slate-800 hover:bg-slate-700 py-1.5 px-3 rounded-lg font-semibold text-slate-300">
                 เพิ่มสำนักพิมพ์
               </button>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* =======================================================
-          MODAL: ADD NEW SERIES
-         ======================================================= */}
-      {showAddSeriesModal && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 w-full max-w-md rounded-2xl overflow-hidden shadow-2xl">
-            <div className="p-4 bg-slate-950 border-b border-slate-800 flex justify-between items-center">
-              <h3 className="font-bold text-slate-200 text-sm">⛓️ เพิ่มชุดซีรีส์ใหม่</h3>
-              <button onClick={() => setShowAddSeriesModal(false)} className="text-slate-400 hover:text-slate-200">✕</button>
-            </div>
-            <form onSubmit={handleAddSeries} className="p-4 space-y-4 text-xs text-left">
-              <div className="space-y-1">
-                <label className="text-slate-400">ชื่อชุดซีรีส์ *</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="เช่น ดาบพิฆาตอสูร..."
-                  value={newSeriesName}
-                  onChange={e => setNewSeriesName(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-200 focus:outline-none"
-                />
-              </div>
-              <button
-                type="submit"
-                className="w-full bg-violet-600 hover:bg-violet-700 text-white font-bold py-2.5 rounded-xl transition-all"
-              >
-                เพิ่มซีรีส์
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* =======================================================
-          MODAL: ADD NEW GOAL
-         ======================================================= */}
-      {showAddGoalModal && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 w-full max-w-md rounded-2xl overflow-hidden shadow-2xl">
-            <div className="p-4 bg-slate-950 border-b border-slate-800 flex justify-between items-center">
-              <h3 className="font-bold text-slate-200 text-sm">🎯 ตั้งเป้าหมายการอ่านใหม่</h3>
-              <button onClick={() => setShowAddGoalModal(false)} className="text-slate-400 hover:text-slate-200">✕</button>
-            </div>
-            <form onSubmit={handleAddGoal} className="p-4 space-y-4 text-xs text-left">
-              <div className="space-y-1">
-                <label className="text-slate-400">ชื่อเรียกของเป้าหมาย</label>
-                <input
-                  type="text"
-                  placeholder="เช่น เป้าหมายของปี 2026..."
-                  value={newGoal.label}
-                  onChange={e => setNewGoal(prev => ({ ...prev, label: e.target.value }))}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-200 focus:outline-none"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="text-slate-400">ปี ค.ศ. *</label>
-                  <input
-                    type="number"
-                    required
-                    value={newGoal.year}
-                    onChange={e => setNewGoal(prev => ({ ...prev, year: e.target.value }))}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-200 focus:outline-none"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-slate-400">เดือน (ใส่ 0 หากเป็นเป้าหมายทั้งปี)</label>
-                  <input
-                    type="number"
-                    min="0"
-                    max="12"
-                    value={newGoal.month}
-                    onChange={e => setNewGoal(prev => ({ ...prev, month: e.target.value }))}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-200 focus:outline-none"
-                  />
-                </div>
-              </div>
-              <div className="space-y-1">
-                <label className="text-slate-400">เป้าหมายจำนวนเล่มที่จะอ่านให้จบ *</label>
-                <input
-                  type="number"
-                  required
-                  min="1"
-                  value={newGoal.targetBooks}
-                  onChange={e => setNewGoal(prev => ({ ...prev, targetBooks: e.target.value }))}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-200 focus:outline-none"
-                />
-              </div>
-              <button
-                type="submit"
-                className="w-full bg-violet-600 hover:bg-violet-700 text-white font-bold py-2.5 rounded-xl transition-all"
-              >
-                บันทึกเป้าหมาย
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* =======================================================
-          MODAL: BOOK DETAILS & MEMORY HIGHLIGHTS
-         ======================================================= */}
-      {selectedBookForDetails && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 w-full max-w-lg rounded-2xl overflow-hidden shadow-2xl">
-            <div className="p-4 bg-slate-950 border-b border-slate-800 flex justify-between items-center">
-              <div>
-                <h3 className="font-bold text-slate-200 text-sm">📝 ประเด็นสำคัญและไฮไลต์จดจำ</h3>
-                <p className="text-[10px] text-slate-400">หนังสือ: {selectedBookForDetails.title}</p>
-              </div>
-              <button 
-                onClick={() => setSelectedBookForDetails(null)}
-                className="text-slate-400 hover:text-slate-200"
-              >
-                ✕
+              <button onclick="openModal('add-book-modal')" id="add-book-trigger-sub" class="text-xs bg-violet-600 hover:bg-violet-700 text-white py-1.5 px-3 rounded-lg font-bold">
+                เพิ่มหนังสือใหม่
               </button>
             </div>
+          </div>
 
-            <div className="p-5 space-y-4 text-xs text-left">
-              <div className="space-y-1">
-                <label className="text-slate-400 font-semibold block">💬 โควทเด็ดประจำใจ (Quotes / Highlights):</label>
-                <textarea
-                  value={selectedBookForDetails.quote || ''}
-                  placeholder="เขียนประโยคทองคำที่คุณชื่นชอบมากที่สุด..."
-                  onChange={(e) => {
-                    const text = e.target.value;
-                    setBooks(prev => prev.map(b => b.id === selectedBookForDetails.id ? { ...b, quote: text } : b));
-                    setSelectedBookForDetails(prev => ({ ...prev, quote: text }));
-                  }}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-200 focus:outline-none focus:border-violet-500 h-20"
-                />
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr class="bg-slate-950 text-slate-400 border-b border-slate-800 font-semibold">
+                  <th class="p-4">ชื่อ / รายละเอียด</th>
+                  <th class="p-4">ผู้แต่ง</th>
+                  <th class="p-4">สำนักพิมพ์</th>
+                  <th class="p-4 text-center">สัดส่วนเล่มที่มี</th>
+                  <th class="p-4">ประเภท</th>
+                  <th class="p-4">สถานะ</th>
+                  <th class="p-4 text-right">ราคา</th>
+                  <th class="p-4 text-center">การจัดการ</th>
+                </tr>
+              </thead>
+              <tbody id="books-table-body" class="divide-y divide-slate-800/50">
+                <!-- Javascript populated rows -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- ==========================================================
+          TAB 3: SERIES TABLE
+         ========================================================== -->
+      <section id="tab-series" class="tab-content space-y-6 hidden">
+        <div class="flex justify-between items-center bg-slate-900 border border-slate-800 p-5 rounded-2xl shadow-xl">
+          <div>
+            <h3 class="text-sm font-bold text-slate-200">⛓️ ตารางซีรีส์ & หนังสือชุด (Series Tracker)</h3>
+            <p class="text-[11px] text-slate-400 mt-0.5">รวมหนังสือชุดและคำนวณอัตราความสำเร็จเพื่อตามซื้อมาเคลียร์กองดอง</p>
+          </div>
+          <button onclick="openModal('add-series-modal')" class="text-xs bg-violet-600 hover:bg-violet-700 text-white font-bold py-2 px-4 rounded-xl shadow-md">
+            เพิ่มซีรีส์ใหม่
+          </button>
+        </div>
+
+        <div id="series-grid-container" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <!-- Dynamically populated -->
+        </div>
+      </section>
+
+      <!-- ==========================================================
+          TAB 4: GOALS TABLE
+         ========================================================== -->
+      <section id="tab-goals" class="tab-content space-y-6 hidden">
+        <div class="flex justify-between items-center bg-slate-900 border border-slate-800 p-5 rounded-2xl shadow-xl">
+          <div>
+            <h3 class="text-sm font-bold text-slate-200">🎯 ตารางเป้าหมายการอ่าน (Reading Target Goal)</h3>
+            <p class="text-[11px] text-slate-400 mt-0.5">เปรียบเทียบเปอร์เซ็นต์ความสำเร็จโดยดึงสถิติจากประวัติการอ่านจบตามกรอบเวลากำหนด</p>
+          </div>
+          <button onclick="openModal('add-goal-modal')" class="text-xs bg-violet-600 hover:bg-violet-700 text-white font-bold py-2 px-4 rounded-xl shadow-md">
+            เพิ่มเป้าหมายการอ่าน
+          </button>
+        </div>
+
+        <div id="goals-grid-container" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <!-- Dynamically populated -->
+        </div>
+      </section>
+
+      <!-- ==========================================================
+          TAB 5: FOCUS MODE (STUDY TIMER)
+         ========================================================== -->
+      <section id="tab-focus" class="tab-content space-y-6 hidden">
+        <div class="max-w-2xl mx-auto bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 text-center space-y-6 shadow-2xl relative overflow-hidden">
+          <div class="absolute top-0 left-0 w-32 h-32 bg-violet-600/10 rounded-full blur-3xl"></div>
+          
+          <div class="space-y-2">
+            <span class="text-[10px] bg-violet-600/20 text-violet-300 border border-violet-500/30 px-3 py-1 rounded-full uppercase tracking-wider font-extrabold">
+              ⏰ Focus Reading Mode
+            </span>
+            <h3 class="text-xl font-bold text-slate-100">โหมดจดจ่อกับการอ่านหนังสือจริง</h3>
+            <p class="text-xs text-slate-400 max-w-md mx-auto">
+              เปิดหน้าต่างนี้ขณะอ่านหนังสือ ปิดเสียงแจ้งเตือนเพื่อสมาธิที่สมบูรณ์และสะสมชั่วโมงการอ่าน
+            </p>
+          </div>
+
+          <!-- Timer Clock -->
+          <div class="py-6 flex justify-center">
+            <div class="w-48 h-48 rounded-full border-4 border-violet-600/30 flex flex-col items-center justify-center relative shadow-xl shadow-violet-950/20">
+              <div class="absolute inset-2 rounded-full border border-dashed border-violet-500/50"></div>
+              <h2 id="focus-clock-time" class="text-4xl font-black mono text-slate-100 tracking-wider">25:00</h2>
+              <p id="focus-clock-label" class="text-[10px] uppercase text-violet-400 font-bold tracking-widest mt-1">Ready</p>
+            </div>
+          </div>
+
+          <!-- Timer Actions -->
+          <div class="flex justify-center gap-3">
+            <button id="focus-start-btn" onclick="toggleFocusTimer()" class="bg-violet-600 hover:bg-violet-700 text-white font-bold text-sm px-6 py-2.5 rounded-xl transition-all shadow-md">
+              เริ่มจดจ่อ
+            </button>
+            <button onclick="resetFocusTimer()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-sm px-6 py-2.5 rounded-xl transition-all">
+              รีเซ็ต
+            </button>
+          </div>
+
+          <!-- Quick Daily Log Input -->
+          <div class="pt-6 border-t border-slate-800/80 max-w-md mx-auto space-y-3">
+            <h4 class="text-xs font-bold text-slate-300 text-left">📝 บันทึกความก้าวหน้าการอ่านอย่างรวดเร็ว:</h4>
+            <div class="flex gap-2">
+              <input
+                id="focus-quick-pages"
+                type="number"
+                placeholder="จำนวนหน้าที่อ่านได้ (หน้า)"
+                class="flex-1 bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-slate-200 focus:outline-none"
+              />
+              <button onclick="saveQuickProgress()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-4 rounded-xl transition-all">
+                บันทึก
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==========================================================
+          TAB 6: PROFILE & AWARD CARD
+         ========================================================== -->
+      <section id="tab-profile" class="tab-content space-y-6 hidden">
+        
+        <!-- Reward Levels description -->
+        <div class="bg-slate-900 border border-slate-800 p-5 rounded-2xl shadow-xl space-y-3">
+          <h3 class="text-sm font-bold text-slate-200 flex items-center gap-2">
+            <i class="fa-solid fa-medal text-pink-400"></i>
+            <span>เงื่อนไขการอัปเกรดการ์ดสะสมเกียรติยศ (Passport Levels)</span>
+          </h3>
+          <p class="text-xs text-slate-400 leading-relaxed">
+            ระบบเกมจะคิดคำนวณเลเวลของคุณจากหนังสือที่อ่านจบและชั่วโมงการอ่านสะสม การ์ดของคุณจะอัปเกรดฟังก์ชันโดยอัตโนมัติ:
+          </p>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-[11px] pt-1.5 text-slate-400">
+            <div class="p-3 bg-slate-950/60 rounded-xl border border-slate-800">
+              <span class="text-slate-300 font-bold block mb-1">🥉 เลเวล 1 - 4: บัตรมาตรฐาน</span>
+              แสดงประวัติชื่อ คำโปรไฟล์ และยอดสถิติทั่วไป
+            </div>
+            <div class="p-3 bg-slate-950/60 rounded-xl border border-slate-800">
+              <span class="text-violet-400 font-bold block mb-1">🥈 เลเวล 5 - 9: บัตรรูปภาพเต็มใบ</span>
+              ปลดล็อกการนำเสนอรูปภาพหน้าปกแบบเต็มใบอย่างล้ำสมัย
+            </div>
+            <div class="p-3 bg-slate-950/60 rounded-xl border border-slate-800">
+              <span class="text-amber-400 font-bold block mb-1">🥇 เลเวล 10+: บัตรแบ่งครึ่งรูป</span>
+              แสดงผลรูปซ้าย-ขวาตัดกันอย่างมีระดับ พร้อมข้อมูลสถิติชั้นสูง
+            </div>
+          </div>
+        </div>
+
+        <!-- Render Target Passport Container -->
+        <div class="flex justify-center py-4">
+          <div id="interactive-passport-card-box" class="w-full flex justify-center">
+            <!-- Dynamic Passport Cards (Standard, Level 5, or Level 10) rendered here -->
+          </div>
+        </div>
+
+        <!-- Edit Profile Details Settings -->
+        <div class="bg-slate-900 border border-slate-800 p-5 rounded-2xl shadow-md space-y-4">
+          <h4 class="text-xs font-bold text-slate-300 uppercase tracking-widest">⚙️ จัดการข้อมูลโปรไฟล์บัตรสะสม</h4>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+            <div class="space-y-1">
+              <label class="text-slate-400">ชื่อนักอ่านของคุณ</label>
+              <input
+                id="profile-input-name"
+                oninput="updateProfileFromSettings()"
+                type="text"
+                class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-200 focus:outline-none"
+              />
+            </div>
+            <div class="space-y-1">
+              <label class="text-slate-400">คำสัตยาบัน / คำอธิบายสั้นๆ (Bio)</label>
+              <input
+                id="profile-input-bio"
+                oninput="updateProfileFromSettings()"
+                type="text"
+                class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-200 focus:outline-none"
+              />
+            </div>
+            <div class="space-y-1">
+              <label class="text-slate-400">ลิงก์รูปภาพประกอบซ้าย (URL / Google Photos)</label>
+              <input
+                id="profile-input-photo-left"
+                oninput="updateProfileFromSettings()"
+                type="text"
+                class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-200 focus:outline-none text-[11px]"
+              />
+            </div>
+            <div class="space-y-1">
+              <label class="text-slate-400">ลิงก์รูปภาพประกอบขวา (URL / Google Photos)</label>
+              <input
+                id="profile-input-photo-right"
+                oninput="updateProfileFromSettings()"
+                type="text"
+                class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-200 focus:outline-none text-[11px]"
+              />
+            </div>
+          </div>
+        </div>
+
+      </section>
+
+    </main>
+  </div>
+
+  <!-- === MOBILE BOTTOM NAVIGATION === -->
+  <nav class="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-slate-900 border-t border-slate-800 py-2.5 px-4 flex justify-between items-center shadow-2xl">
+    <button onclick="switchTab('dashboard')" class="mobile-tab-btn active flex flex-col items-center gap-1 text-slate-400 hover:text-slate-200">
+      <i class="fa-solid fa-chart-pie text-sm"></i>
+      <span class="text-[9px]">แดชบอร์ด</span>
+    </button>
+    <button onclick="switchTab('books')" class="mobile-tab-btn flex flex-col items-center gap-1 text-slate-400 hover:text-slate-200">
+      <i class="fa-solid fa-bookmark text-sm"></i>
+      <span class="text-[9px]">คลังหนังสือ</span>
+    </button>
+    <button onclick="switchTab('series')" class="mobile-tab-btn flex flex-col items-center gap-1 text-slate-400 hover:text-slate-200">
+      <i class="fa-solid fa-layer-group text-sm"></i>
+      <span class="text-[9px]">ซีรีส์ชุด</span>
+    </button>
+    <button onclick="switchTab('goals')" class="mobile-tab-btn flex flex-col items-center gap-1 text-slate-400 hover:text-slate-200">
+      <i class="fa-solid fa-bullseye text-sm"></i>
+      <span class="text-[9px]">เป้าหมาย</span>
+    </button>
+    <button onclick="switchTab('focus')" class="mobile-tab-btn flex flex-col items-center gap-1 text-slate-400 hover:text-slate-200">
+      <i class="fa-solid fa-hourglass-start text-sm"></i>
+      <span class="text-[9px]">โฟกัส</span>
+    </button>
+    <button onclick="switchTab('profile')" class="mobile-tab-btn flex flex-col items-center gap-1 text-slate-400 hover:text-slate-200">
+      <i class="fa-solid fa-id-card text-sm"></i>
+      <span class="text-[9px]">บัตรสะสม</span>
+    </button>
+  </nav>
+
+  <!-- ==========================================================
+      MODAL 1: ADD BOOK FORM
+     ========================================================== -->
+  <div id="add-book-modal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 w-full max-w-lg rounded-2xl overflow-hidden shadow-2xl">
+      <div class="p-4 bg-slate-950 border-b border-slate-800 flex justify-between items-center">
+        <h3 class="font-bold text-slate-200 text-sm">➕ เพิ่มข้อมูลหนังสือใหม่เข้าสู่ระบบ</h3>
+        <button onclick="closeModal('add-book-modal')" class="text-slate-400 hover:text-slate-200"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+
+      <form onsubmit="handleFormAddBook(event)" class="p-4 space-y-4 max-h-[75vh] overflow-y-auto text-xs text-left">
+        <div class="space-y-1">
+          <label class="text-slate-400 font-semibold">ชื่อหนังสือ / นิยาย *</label>
+          <input
+            id="form-title"
+            type="text"
+            required
+            placeholder="เช่น โลกใบนี้มีเพียงฉันและเธอ เล่ม 1..."
+            class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-200 focus:outline-none focus:border-violet-500"
+          />
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div class="space-y-1">
+            <label class="text-slate-400">ผู้แต่ง</label>
+            <input
+              id="form-author"
+              type="text"
+              placeholder="กรอกชื่อผู้เขียน..."
+              class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-200 focus:outline-none"
+            />
+          </div>
+          <div class="space-y-1">
+            <label class="text-slate-400">ประเภทวรรณกรรม</label>
+            <select
+              id="form-genre"
+              class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-200 focus:outline-none"
+            >
+              <!-- Populated via script -->
+            </select>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div class="space-y-1">
+            <label class="text-slate-400">สำนักพิมพ์ / สีประดับ</label>
+            <select
+              id="form-publisher"
+              class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-200 focus:outline-none"
+            >
+              <!-- Populated via script -->
+            </select>
+          </div>
+          <div class="space-y-1">
+            <label class="text-slate-400">สถานะเริ่มต้น</label>
+            <select
+              id="form-status"
+              class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-200 focus:outline-none"
+            >
+              <option value="Wishlist">Wishlist (อยากได้)</option>
+              <option value="ดอง">ดอง (ซื้อแล้วแต่ยังไม่อ่าน)</option>
+              <option value="กำลังอ่าน">กำลังอ่าน</option>
+              <option value="อ่านจบ">อ่านจบแล้ว</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div class="space-y-1">
+            <label class="text-slate-400">จำนวนเล่มที่มี</label>
+            <input
+              id="form-owned"
+              type="number"
+              min="1"
+              value="1"
+              class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-200 focus:outline-none"
+            />
+          </div>
+          <div class="space-y-1">
+            <label class="text-slate-400">จำนวนเล่มทั้งหมดของซีรีส์</label>
+            <input
+              id="form-total-vols"
+              type="number"
+              min="1"
+              value="1"
+              class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-200 focus:outline-none"
+            />
+          </div>
+        </div>
+
+        <div class="grid grid-cols-3 gap-3">
+          <div class="space-y-1">
+            <label class="text-slate-400">ราคาซื้อ (บาท)</label>
+            <input
+              id="form-cost"
+              type="number"
+              min="0"
+              value="0"
+              class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-200 focus:outline-none"
+            />
+          </div>
+          <div class="space-y-1">
+            <label class="text-slate-400">คะแนนความชอบ (0-5)</label>
+            <input
+              id="form-rating"
+              type="number"
+              min="0"
+              max="5"
+              step="0.5"
+              value="0"
+              class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-200 focus:outline-none"
+            />
+          </div>
+          <div class="space-y-1">
+            <label class="text-slate-400">ชั่วโมงที่ใช้ในการอ่าน</label>
+            <input
+              id="form-reading-time"
+              type="number"
+              min="0"
+              value="0"
+              class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-200 focus:outline-none"
+            />
+          </div>
+        </div>
+
+        <div class="space-y-1">
+          <label class="text-slate-400">หมายเหตุ / การแจ้งเตือน</label>
+          <input
+            id="form-note"
+            type="text"
+            placeholder="เขียนคำเตือน หรือบันทึกดักไว้ที่นี่..."
+            class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-200 focus:outline-none"
+          />
+        </div>
+
+        <div class="flex items-center gap-2">
+          <input
+            id="form-is-favorite"
+            type="checkbox"
+            class="w-4 h-4 text-violet-600 bg-slate-950 border-slate-800 rounded"
+          />
+          <label for="form-is-favorite" class="text-slate-300 font-bold">ตั้งค่าหนังสือเล่มนี้เป็น 'เล่มโปรด' ⭐</label>
+        </div>
+
+        <div class="pt-2 flex gap-2">
+          <button type="button" onclick="closeModal('add-book-modal')" class="w-1/2 bg-slate-800 hover:bg-slate-700 text-slate-300 py-2.5 rounded-xl transition-all">ยกเลิก</button>
+          <button type="submit" class="w-1/2 bg-violet-600 hover:bg-violet-700 text-white font-bold py-2.5 rounded-xl transition-all shadow-md">บันทึกเข้าคลัง</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ==========================================================
+      MODAL 2: ADD PUBLISHER FORM
+     ========================================================== -->
+  <div id="add-pub-modal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 w-full max-w-md rounded-2xl overflow-hidden shadow-2xl">
+      <div class="p-4 bg-slate-950 border-b border-slate-800 flex justify-between items-center">
+        <h3 class="font-bold text-slate-200 text-sm">🎨 เพิ่มสำนักพิมพ์ใหม่</h3>
+        <button onclick="closeModal('add-pub-modal')" class="text-slate-400 hover:text-slate-200"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <form onsubmit="handleFormAddPub(event)" class="p-4 space-y-4 text-xs text-left">
+        <div class="space-y-1">
+          <label class="text-slate-400">ชื่อสำนักพิมพ์ *</label>
+          <input id="form-pub-name" type="text" required placeholder="กรอกชื่อสำนักพิมพ์..." class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-200 focus:outline-none" />
+        </div>
+        <div class="space-y-1">
+          <label class="text-slate-400">สีประจำสำนักพิมพ์ (Hex Color)</label>
+          <input id="form-pub-color" type="color" value="#3b82f6" class="w-full h-10 bg-slate-950 border border-slate-800 rounded-xl p-1 cursor-pointer focus:outline-none" />
+        </div>
+        <button type="submit" class="w-full bg-violet-600 hover:bg-violet-700 text-white font-bold py-2.5 rounded-xl transition-all">เพิ่มสำนักพิมพ์</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ==========================================================
+      MODAL 3: ADD SERIES FORM
+     ========================================================== -->
+  <div id="add-series-modal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 w-full max-w-md rounded-2xl overflow-hidden shadow-2xl">
+      <div class="p-4 bg-slate-950 border-b border-slate-800 flex justify-between items-center">
+        <h3 class="font-bold text-slate-200 text-sm">⛓️ เพิ่มชุดซีรีส์ใหม่</h3>
+        <button onclick="closeModal('add-series-modal')" class="text-slate-400 hover:text-slate-200"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <form onsubmit="handleFormAddSeries(event)" class="p-4 space-y-4 text-xs text-left">
+        <div class="space-y-1">
+          <label class="text-slate-400">ชื่อชุดวรรณกรรมชุดร่วมกัน *</label>
+          <input id="form-series-name" type="text" required placeholder="กรอกชื่อซีรีส์ชุด..." class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-200 focus:outline-none" />
+        </div>
+        <button type="submit" class="w-full bg-violet-600 hover:bg-violet-700 text-white font-bold py-2.5 rounded-xl transition-all">สร้างซีรีส์ชุด</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ==========================================================
+      MODAL 4: ADD GOAL FORM
+     ========================================================== -->
+  <div id="add-goal-modal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 w-full max-w-md rounded-2xl overflow-hidden shadow-2xl">
+      <div class="p-4 bg-slate-950 border-b border-slate-800 flex justify-between items-center">
+        <h3 class="font-bold text-slate-200 text-sm">🎯 กำหนดเป้าหมายการอ่านใหม่</h3>
+        <button onclick="closeModal('add-goal-modal')" class="text-slate-400 hover:text-slate-200"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <form onsubmit="handleFormAddGoal(event)" class="p-4 space-y-4 text-xs text-left">
+        <div class="space-y-1">
+          <label class="text-slate-400">ป้ายชื่อกำกับเป้าหมาย</label>
+          <input id="form-goal-label" type="text" required placeholder="เช่น เป้าหมายปี 2026..." class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-200 focus:outline-none" />
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div class="space-y-1">
+            <label class="text-slate-400">ปี (ค.ศ.)</label>
+            <input id="form-goal-year" type="number" value="2026" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-200 focus:outline-none" />
+          </div>
+          <div class="space-y-1">
+            <label class="text-slate-400">เดือนที่กำหนด (1-12, 0=ทั้งปี)</label>
+            <input id="form-goal-month" type="number" min="0" max="12" value="0" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-200 focus:outline-none" />
+          </div>
+        </div>
+        <div class="space-y-1">
+          <label class="text-slate-400">จำนวนเล่มเป้าหมายเพื่อพิชิตความสำเร็จ</label>
+          <input id="form-goal-target" type="number" min="1" value="10" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-200 focus:outline-none" />
+        </div>
+        <button type="submit" class="w-full bg-violet-600 hover:bg-violet-700 text-white font-bold py-2.5 rounded-xl transition-all">บันทึกความฝัน</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ==========================================================
+      MODAL 5: DETAIL MEMORY SYSTEM (INSIGHTS / HIGHLIGHT NOTES)
+     ========================================================== -->
+  <div id="detail-book-modal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 w-full max-w-lg rounded-2xl overflow-hidden shadow-2xl">
+      <div class="p-4 bg-slate-950 border-b border-slate-800 flex justify-between items-center">
+        <div>
+          <h3 class="font-bold text-slate-200 text-sm">📝 บันทึกประเด็นและตกผลึกความคิด</h3>
+          <p id="detail-book-subtitle" class="text-[10px] text-slate-400">ชื่อหนังสือ: -</p>
+        </div>
+        <button onclick="closeModal('detail-book-modal')" class="text-slate-400 hover:text-slate-200"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+
+      <div class="p-5 space-y-4 text-xs text-left">
+        <input id="detail-book-id" type="hidden" />
+
+        <div class="space-y-1">
+          <label class="text-slate-400 font-semibold block">💬 คำคมโดนใจประจำเล่ม (Quotes / Highlights):</label>
+          <textarea
+            id="detail-book-quote"
+            placeholder="เขียนประโยคทองคำที่คุณชื่นชอบมากที่สุด..."
+            class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-200 focus:outline-none focus:border-violet-500 h-20"
+          ></textarea>
+        </div>
+
+        <div class="space-y-1">
+          <label class="text-slate-400 font-semibold block">🧠 บทเรียนสรุป / ตกผลึกการนำไปใช้ (Memory Insights):</label>
+          <textarea
+            id="detail-book-insight"
+            placeholder="บันทึกย่อเพื่อการเปลี่ยนแปลงพฤติกรรมของคุณหลังจากอ่าน..."
+            class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-200 focus:outline-none focus:border-violet-500 h-24"
+          ></textarea>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3 text-[11px] pt-2 border-t border-slate-800 text-slate-400">
+          <div>
+            <span class="block font-bold text-slate-300">วันที่เริ่มต้นอ่าน:</span>
+            <input
+              id="detail-book-start-date"
+              type="date"
+              class="bg-slate-950 border border-slate-800 rounded-lg p-2 mt-1 text-[11px] text-slate-200 w-full focus:outline-none"
+            />
+          </div>
+          <div>
+            <span class="block font-bold text-slate-300">วันที่สำเร็จความสนุก:</span>
+            <input
+              id="detail-book-end-date"
+              type="date"
+              class="bg-slate-950 border border-slate-800 rounded-lg p-2 mt-1 text-[11px] text-slate-200 w-full focus:outline-none"
+            />
+          </div>
+        </div>
+
+        <div class="pt-3">
+          <button onclick="saveBookDetailsMemo()" class="w-full bg-violet-600 hover:bg-violet-700 text-white font-bold py-2.5 rounded-xl transition-all">
+            บันทึกความรู้สะสม
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- === CORE BUSINESS LOGIC SCRIPT ENGINE === -->
+  <script>
+    // Constants setup
+    const GENRES = [
+      'นิยาย (Novel)',
+      'ไลท์โนเวล (Light Novel)',
+      'มังงะ (Manga)',
+      'พัฒนาตนเอง (Self-Improvement)',
+      'ธุรกิจและการเงิน (Business & Finance)',
+      'วิทยาศาสตร์ / เทคโนโลยี (Science/Tech)',
+      'จิตวิทยา / ปรัชญา (Psychology/Philosophy)',
+      'ประวัติศาสตร์ / วรรณกรรม (History/Literature)',
+      'อื่นๆ (Others)'
+    ];
+
+    const DEFAULT_PUBLISHERS = [
+      { id: 'pub-1', name: 'สยามอินเตอร์', color: '#E11D48' },
+      { id: 'pub-2', name: 'เนชั่น', color: '#2563EB' },
+      { id: 'pub-3', name: 'Phoenix Next', color: '#7C3AED' },
+      { id: 'pub-4', name: 'WeLearn', color: '#059669' },
+      { id: 'pub-5', name: 'อมรินทร์', color: '#D97706' },
+      { id: 'pub-6', name: 'Zenshu', color: '#DB2777' }
+    ];
+
+    // Reactive Global State variables
+    let books = [];
+    let series = [];
+    let goals = [];
+    let publishers = [];
+    let readingLogs = {};
+    let userProfile = {
+      name: 'นักสแกนหน้ากองดอง',
+      bio: 'ความสุขไม่ได้ขึ้นอยู่กับปริมาณหนังสือที่ซื้อ แต่ขึ้นอยู่กับความสูงของชั้นวางหนังสือ 📖',
+      photoLeft: 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&q=80&w=600',
+      photoRight: 'https://images.unsplash.com/photo-1506880018603-83d5b814b5a6?auto=format&fit=crop&q=80&w=600'
+    };
+    let activeTab = 'dashboard';
+    let activeSmartFilter = 'all';
+
+    // State Timer for Focus Mode
+    let timerInterval = null;
+    let timerSecondsLeft = 25 * 60;
+    let isTimerRunning = false;
+
+    // Load initial system data on startup
+    window.onload = function() {
+      initSystem();
+    };
+
+    function initSystem() {
+      // Load saved database values or default empty setup as requested
+      books = JSON.parse(localStorage.getItem('books')) || [];
+      series = JSON.parse(localStorage.getItem('series')) || [];
+      goals = JSON.parse(localStorage.getItem('goals')) || [
+        { id: 'g-default-1', year: 2026, month: 6, targetBooks: 5, label: 'เป้าหมายมิถุนายน 2026' },
+        { id: 'g-default-2', year: 2026, month: 0, targetBooks: 50, label: 'เป้าหมายตลอดปี 2026' }
+      ];
+      publishers = JSON.parse(localStorage.getItem('publishers')) || DEFAULT_PUBLISHERS;
+      readingLogs = JSON.parse(localStorage.getItem('readingLogs')) || {};
+      userProfile = JSON.parse(localStorage.getItem('userProfile')) || userProfile;
+
+      // Fill in dropdown selection systems
+      populateDropdowns();
+
+      // Perform all automated dynamic math calculations
+      recomputeAllStats();
+
+      // Show first default screen views
+      renderAppViews();
+    }
+
+    function populateDropdowns() {
+      // Genre dropdown in main book modal
+      const formGenre = document.getElementById('form-genre');
+      const filterGenre = document.getElementById('filter-genre');
+      
+      formGenre.innerHTML = '';
+      filterGenre.innerHTML = '<option value="all">ทุกประเภทหนังสือ</option>';
+      
+      GENRES.forEach(g => {
+        formGenre.innerHTML += `<option value="${g}">${g}</option>`;
+        filterGenre.innerHTML += `<option value="${g}">${g}</option>`;
+      });
+
+      // Publisher dropdown in book modal
+      const formPub = document.getElementById('form-publisher');
+      const filterPub = document.getElementById('filter-publisher');
+      
+      formPub.innerHTML = '';
+      filterPub.innerHTML = '<option value="all">ทุกสำนักพิมพ์</option>';
+      
+      publishers.forEach(p => {
+        formPub.innerHTML += `<option value="${p.id}">${p.name}</option>`;
+        filterPub.innerHTML += `<option value="${p.id}">${p.name}</option>`;
+      });
+    }
+
+    function saveToStorage() {
+      localStorage.setItem('books', JSON.stringify(books));
+      localStorage.setItem('series', JSON.stringify(series));
+      localStorage.setItem('goals', JSON.stringify(goals));
+      localStorage.setItem('publishers', JSON.stringify(publishers));
+      localStorage.setItem('readingLogs', JSON.stringify(readingLogs));
+      localStorage.setItem('userProfile', JSON.stringify(userProfile));
+    }
+
+    // === NAVIGATION CONTROLLERS ===
+    function switchTab(tabId) {
+      activeTab = tabId;
+      document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+      document.getElementById('tab-' + tabId).classList.remove('hidden');
+
+      // Sync active state sidebar buttons
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('bg-violet-600/25', 'text-violet-300', 'border-l-4', 'border-violet-500');
+        btn.classList.add('text-slate-400');
+      });
+
+      // Try desktop elements matching
+      const targetBtn = Array.from(document.querySelectorAll('.tab-btn')).find(btn => btn.getAttribute('onclick').includes(tabId));
+      if (targetBtn) {
+        targetBtn.classList.remove('text-slate-400');
+        targetBtn.classList.add('bg-violet-600/25', 'text-violet-300', 'border-l-4', 'border-violet-500');
+      }
+
+      // Sync mobile view bottom bar buttons active status
+      document.querySelectorAll('.mobile-tab-btn').forEach(btn => {
+        btn.classList.remove('text-violet-400');
+        btn.classList.add('text-slate-400');
+      });
+      const targetMobileBtn = Array.from(document.querySelectorAll('.mobile-tab-btn')).find(btn => btn.getAttribute('onclick').includes(tabId));
+      if (targetMobileBtn) {
+        targetMobileBtn.classList.add('text-violet-400');
+      }
+
+      // Special Tab-driven render triggers
+      renderAppViews();
+    }
+
+    function setSmartFilter(filterId) {
+      activeSmartFilter = filterId;
+      document.querySelectorAll('.quick-filter-btn').forEach(btn => {
+        btn.classList.remove('bg-violet-600', 'text-white');
+        btn.classList.add('bg-slate-950', 'border', 'border-slate-800', 'text-slate-400');
+      });
+      const activeBtn = Array.from(document.querySelectorAll('.quick-filter-btn')).find(btn => btn.getAttribute('onclick').includes(filterId));
+      if (activeBtn) {
+        activeBtn.classList.remove('bg-slate-950', 'border', 'border-slate-800', 'text-slate-400');
+        activeBtn.classList.add('bg-violet-600', 'text-white');
+      }
+      renderBookTable();
+    }
+
+    // === MODAL CONTROLLER HANDLERS ===
+    function openModal(modalId) {
+      document.getElementById(modalId).classList.remove('hidden');
+    }
+
+    function closeModal(modalId) {
+      document.getElementById(modalId).classList.add('hidden');
+    }
+
+    // === DEMO DATA SEED INJECTOR ===
+    function injectDemoData() {
+      books = [
+        {
+          id: 'demo-1',
+          title: 'เซนส์และการเงินส่วนบุคคล เล่ม 1',
+          author: 'ธนวัฒน์ ดีเลิศ',
+          genre: 'ธุรกิจและการเงิน (Business & Finance)',
+          status: 'อ่านจบ',
+          publisherId: 'pub-4',
+          volumeOwned: 1,
+          volumeTotal: 1,
+          note: 'ปรับมายด์เซ็ตการสะสมการเงิน คุ้มค่าที่สุด!',
+          isFavorite: true,
+          cost: 295,
+          rating: 5,
+          readingTime: 6,
+          startDate: '2026-06-01',
+          endDate: '2026-06-03',
+          quote: 'เงินไม่ได้กำหนดความสุข แต่วิธีคิดการจัดการต่างหาก',
+          insight: 'เปิดกองดองการเงินเพื่อลดรายจ่ายที่ไม่จำเป็นในอนาคต'
+        },
+        {
+          id: 'demo-2',
+          title: 'กำเนิดใหม่ในต่างโลกพลังโกง เล่ม 1',
+          author: 'ชิน นารุโตะ',
+          genre: 'ไลท์โนเวล (Light Novel)',
+          status: 'กำลังอ่าน',
+          publisherId: 'pub-3',
+          volumeOwned: 1,
+          volumeTotal: 10,
+          note: 'ซื้อมาดองไว้ก่อน สนุกระดับต้นๆ ของซีซัน',
+          isFavorite: false,
+          cost: 180,
+          rating: 4,
+          readingTime: 3,
+          startDate: '2026-06-19',
+          endDate: '',
+          quote: '',
+          insight: ''
+        },
+        {
+          id: 'demo-3',
+          title: 'วันเดอร์แลนด์ผจญภัย เล่ม 1',
+          author: 'อลิส สเปซ',
+          genre: 'นิยาย (Novel)',
+          status: 'ดอง',
+          publisherId: 'pub-1',
+          volumeOwned: 1,
+          volumeTotal: 8,
+          note: 'ซื้อมาเก็บสะสมตามกระแสรีวิว',
+          isFavorite: false,
+          cost: 350,
+          rating: 0,
+          readingTime: 0,
+          startDate: '',
+          endDate: '',
+          quote: '',
+          insight: ''
+        },
+        {
+          id: 'demo-4',
+          title: 'สูตรลับอาหารสมองพัฒนาสมอง',
+          author: 'ดร.สมชาย ใจดี',
+          genre: 'พัฒนาตนเอง (Self-Improvement)',
+          status: 'ดอง',
+          publisherId: 'pub-5',
+          volumeOwned: 1,
+          volumeTotal: 1,
+          note: 'ดองสะสม นานเกิน 3 เดือนแล้ว',
+          isFavorite: true,
+          cost: 245,
+          rating: 0,
+          readingTime: 0,
+          startDate: '',
+          endDate: '',
+          quote: '',
+          insight: ''
+        }
+      ];
+
+      series = [
+        { id: 'ser-1', name: 'กำเนิดใหม่ในต่างโลกพลังโกง', bookIds: ['demo-2'] },
+        { id: 'ser-2', name: 'วันเดอร์แลนด์ผจญภัย', bookIds: ['demo-3'] }
+      ];
+
+      readingLogs = {
+        '2026-06-01': { pages: 40, hours: 2 },
+        '2026-06-02': { pages: 75, hours: 3 },
+        '2026-06-03': { pages: 55, hours: 1 },
+        '2026-06-19': { pages: 30, hours: 2 }
+      };
+
+      saveToStorage();
+      initSystem();
+    }
+
+    function clearSystemData() {
+      if (confirm('คุณยืนยันที่จะลบข้อมูลหนังสือและประวัติการอ่านทั้งหมดในระบบใช่หรือไม่? การตัดสินใจนี้ไม่สามารถย้อนคืนได้')) {
+        localStorage.clear();
+        books = [];
+        series = [];
+        readingLogs = {};
+        goals = [];
+        publishers = DEFAULT_PUBLISHERS;
+        initSystem();
+      }
+    }
+
+    // === AUTOMATED RECOMPUTATION STATE ENGINE ===
+    function recomputeAllStats() {
+      // 1. Math tallies
+      const totalCount = books.length;
+      const readCount = books.filter(b => b.status === 'อ่านจบ').length;
+      const hoardCount = books.filter(b => b.status === 'ดอง').length;
+      const totalCost = books.reduce((acc, b) => acc + (Number(b.cost) || 0), 0);
+      const totalHours = books.reduce((acc, b) => acc + (Number(b.readingTime) || 0), 0);
+
+      // Save count status
+      document.getElementById('stat-read-count').innerText = readCount + ' เล่ม';
+      document.getElementById('stat-hoard-count').innerText = hoardCount + ' เล่ม';
+      document.getElementById('stat-total-cost').innerText = '฿' + totalCost.toLocaleString();
+      document.getElementById('stat-total-hours').innerText = totalHours.toLocaleString() + ' ชม.';
+
+      // Compute current gamification XP (Books read * 15 XP + hours read * 3 XP)
+      const hoursLogged = Object.values(readingLogs).reduce((acc, l) => acc + (l.hours || 0), 0);
+      const calculatedXP = (readCount * 15) + (hoursLogged * 3);
+      const level = Math.floor(calculatedXP / 50) + 1; // 50 XP per level
+      const xpProgressPercent = (calculatedXP % 50) * 2;
+
+      document.getElementById('sidebar-level').innerText = level;
+      document.getElementById('sidebar-avatar').innerText = 'LV.' + level;
+      document.getElementById('sidebar-xp-bar').style.width = xpProgressPercent + '%';
+      document.getElementById('sidebar-user-name').innerText = userProfile.name;
+
+      // Update sync elements inside configuration settings
+      document.getElementById('profile-input-name').value = userProfile.name;
+      document.getElementById('profile-input-bio').value = userProfile.bio;
+      document.getElementById('profile-input-photo-left').value = userProfile.photoLeft;
+      document.getElementById('profile-input-photo-right').value = userProfile.photoRight;
+
+      // 2. AI Brain Intelligence Decision
+      const alertBox = document.getElementById('ai-alert-message');
+      const addTriggerBtn = document.getElementById('add-book-trigger-btn');
+      const addTriggerSub = document.getElementById('add-book-trigger-sub');
+
+      if (hoardCount > 10) {
+        alertBox.innerHTML = `🔒 <span class="font-extrabold text-rose-400">ระงับและล็อกการนำหนังสือใหม่เข้ากองดองชั่วคราว!</span> อัตรากองดองปัจจุบันสูงวิกฤต (${hoardCount} เล่ม) ควรอ่านให้จบเพื่อปลดเกณฑ์การเพิ่มหนังสือ`;
+        addTriggerBtn.disabled = true;
+        addTriggerBtn.classList.add('opacity-50', 'cursor-not-allowed');
+        addTriggerSub.disabled = true;
+        addTriggerSub.classList.add('opacity-50', 'cursor-not-allowed');
+      } else if (hoardCount > 5) {
+        alertBox.innerHTML = `⚠️ <span class="font-bold text-amber-400">อัตรากองดองเริ่มค้างสะสมหนาตา!</span> ควรใช้โหมดอ่านจริงเคลียร์กองดองเล่มโปรดก่อนที่ระบบจะล็อกการทำงานชั่วคราว`;
+        addTriggerBtn.disabled = false;
+        addTriggerBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+        addTriggerSub.disabled = false;
+        addTriggerSub.classList.remove('opacity-50', 'cursor-not-allowed');
+      } else {
+        alertBox.innerHTML = `🎉 <span class="font-bold text-emerald-400">ความสมดุลกองดองอยู่ในเกณฑ์ดีเยี่ยม!</span> ยินดีด้วย คุณรักษาวินัยการจัดซื้อและอัตราการอ่านจบได้สมบูรณ์แบบมาก`;
+        addTriggerBtn.disabled = false;
+        addTriggerBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+        addTriggerSub.disabled = false;
+        addTriggerSub.classList.remove('opacity-50', 'cursor-not-allowed');
+      }
+
+      // 3. Donut Graph Update
+      const donutProgress = document.getElementById('donut-progress-circle');
+      const donutPercent = document.getElementById('donut-percentage-text');
+      if (totalCount > 0) {
+        const readPercent = Math.round((readCount / totalCount) * 100);
+        donutPercent.innerText = readPercent + '%';
+        donutProgress.setAttribute('stroke-dasharray', `${readPercent} ${100 - readPercent}`);
+      } else {
+        donutPercent.innerText = '0%';
+        donutProgress.setAttribute('stroke-dasharray', '0 100');
+      }
+
+      // 4. Financial Behavior Update (Book vs Novel)
+      let novelCost = 0;
+      let novelCount = 0;
+      let bookCost = 0;
+      let bookCount = 0;
+
+      books.forEach(b => {
+        const cost = Number(b.cost) || 0;
+        const isNovel = b.genre.includes('นิยาย') || b.genre.includes('Novel') || b.genre.includes('มังงะ') || b.genre.includes('Manga');
+        if (isNovel) {
+          novelCost += cost;
+          novelCount++;
+        } else {
+          bookCost += cost;
+          bookCount++;
+        }
+      });
+
+      const fullFinCost = novelCost + bookCost;
+      const novelPercent = fullFinCost > 0 ? (novelCost / fullFinCost) * 100 : 50;
+      const bookPercent = fullFinCost > 0 ? (bookCost / fullFinCost) * 100 : 50;
+
+      document.getElementById('chart-novel-bar').style.width = novelPercent + '%';
+      document.getElementById('chart-book-bar').style.width = bookPercent + '%';
+
+      document.getElementById('cost-novel-label').innerText = '฿' + novelCost.toLocaleString();
+      document.getElementById('count-novel-label').innerText = novelCount + ' เล่มสะสม';
+      document.getElementById('cost-book-label').innerText = '฿' + bookCost.toLocaleString();
+      document.getElementById('count-book-label').innerText = bookCount + ' เล่มสะสม';
+
+      const adviceBox = document.getElementById('financial-advice-box');
+      if (totalCount === 0) {
+        adviceBox.innerHTML = 'ไม่มีข้อมูลในระบบเพื่อวิเคราะห์พฤติกรรมการอุดหนุน';
+      } else if (novelCost > bookCost) {
+        adviceBox.innerHTML = '💡 <span class="font-bold text-pink-400">วิเคราะห์:</span> คุณหมดงบส่วนใหญ่ไปกับนิยายและความบันเทิง ควรลองเปลี่ยนมาเติมความรู้สายพัฒนาตนเองเพื่อเพิ่ม ROI การอ่านนะครับ';
+      } else {
+        adviceBox.innerHTML = '💡 <span class="font-bold text-sky-400">วิเคราะห์:</span> คุณเน้นการลงทุนเชิงลึกเกี่ยวกับหนังสือพัฒนาตนเอง ประสิทธิภาพยอดเยี่ยมมากสำหรับการเสริมศักยภาพชีวิต!';
+      }
+    }
+
+    // === VIEWS RENDERING MASTER ENGINE ===
+    function renderAppViews() {
+      populateDropdowns();
+      recomputeAllStats();
+
+      if (activeTab === 'dashboard') {
+        renderHeatmap();
+        renderNearCompleteSeries();
+        renderRoiInsights();
+      } else if (activeTab === 'books') {
+        renderBookTable();
+      } else if (activeTab === 'series') {
+        renderSeriesGrid();
+      } else if (activeTab === 'goals') {
+        renderGoalsGrid();
+      } else if (activeTab === 'profile') {
+        renderPassportCard();
+      }
+    }
+
+    // --- DETAIL VIEW: HEATMAP (GITHUB STYLE) ---
+    function renderHeatmap() {
+      const container = document.getElementById('heatmap-panel-container');
+      container.innerHTML = '';
+
+      const daysOfYear = [];
+      const startDate = new Date('2026-01-01');
+      const endDate = new Date('2026-12-31');
+      let current = new Date(startDate);
+
+      while (current <= endDate) {
+        daysOfYear.push(new Date(current));
+        current.setDate(current.getDate() + 1);
+      }
+
+      let gridItems = '';
+      daysOfYear.forEach(day => {
+        const dateStr = day.toISOString().split('T')[0];
+        const log = readingLogs[dateStr] || { pages: 0, hours: 0 };
+        
+        let colorClass = 'bg-slate-800';
+        if (log.pages > 50) colorClass = 'bg-emerald-400';
+        else if (log.pages > 30) colorClass = 'bg-emerald-500 opacity-90';
+        else if (log.pages > 10) colorClass = 'bg-emerald-600 opacity-70';
+        else if (log.pages > 0) colorClass = 'bg-emerald-800 opacity-50';
+
+        gridItems += `
+          <div
+            class="w-2.5 h-2.5 rounded-sm transition-all hover:scale-125 cursor-pointer relative group ${colorClass}"
+            title="${dateStr} | อ่านสะสม: ${log.pages} หน้า (${log.hours} ชม.)"
+            onclick="quickLogHeatmapTrigger('${dateStr}')"
+          >
+            <div class="absolute hidden group-hover:block bottom-4 left-1/2 -translate-x-1/2 bg-slate-950 text-[10px] text-white py-1 px-2.5 rounded-md whitespace-nowrap z-50 border border-slate-700">
+              ${dateStr} • ${log.pages} หน้า (${log.hours} ชม.)
+            </div>
+          </div>
+        `;
+      });
+
+      container.innerHTML = `
+        <div class="overflow-x-auto p-4 bg-slate-900 border border-slate-800 rounded-2xl">
+          <h4 class="text-xs font-bold text-slate-300 mb-3 flex items-center gap-2">
+            <i class="fa-solid fa-calendar-days text-emerald-400"></i>
+            <span>Heatmap บันทึกชั่วโมงการอ่านรายวัน (ปี 2026)</span>
+          </h4>
+          <div class="grid grid-flow-col grid-rows-7 gap-1 w-max">
+            ${gridItems}
+          </div>
+          <div class="flex justify-between items-center mt-3 text-[10px] text-slate-400">
+            <span>ม.ค. 2026</span>
+            <div class="flex gap-1 items-center">
+              <span>น้อย</span>
+              <div class="w-3 h-3 bg-slate-800 rounded-sm"></div>
+              <div class="w-3 h-3 bg-emerald-800 opacity-50 rounded-sm"></div>
+              <div class="w-3 h-3 bg-emerald-600 opacity-70 rounded-sm"></div>
+              <div class="w-3 h-3 bg-emerald-400 rounded-sm"></div>
+              <span>มาก</span>
+            </div>
+            <span>ธ.ค. 2026</span>
+          </div>
+        </div>
+      `;
+    }
+
+    function quickLogHeatmapTrigger(dateStr) {
+      const pages = prompt(`บันทึกการอ่านย้อนหลังสำหรับวันที่: ${dateStr}\nกรุณากรอกจำนวนหน้า:`, "30");
+      if (pages === null) return;
+      const hours = prompt("กรุณากรอกระยะเวลา (ชั่วโมง):", "1");
+      if (hours === null) return;
+
+      if (!readingLogs[dateStr]) {
+        readingLogs[dateStr] = { pages: 0, hours: 0 };
+      }
+      readingLogs[dateStr].pages += Number(pages) || 0;
+      readingLogs[dateStr].hours += Number(hours) || 0;
+
+      saveToStorage();
+      renderAppViews();
+    }
+
+    // --- DETAIL VIEW: NEAR COMPLETE SERIES ---
+    function renderNearCompleteSeries() {
+      const container = document.getElementById('near-complete-series-list');
+      container.innerHTML = '';
+
+      const nearSeriesList = series.map(s => {
+        const associated = books.filter(b => s.bookIds.includes(b.id));
+        if (associated.length === 0) return { ...s, owned: 0, total: 0, percent: 0 };
+        const owned = associated.reduce((sum, b) => sum + (Number(b.volumeOwned) || 0), 0);
+        const total = associated.reduce((sum, b) => sum + (Number(b.volumeTotal) || 0), 0);
+        const percent = total > 0 ? Math.round((owned / total) * 100) : 0;
+        return { ...s, owned, total, percent };
+      }).filter(s => s.percent > 0 && s.percent < 100).sort((a, b) => b.percent - a.percent);
+
+      if (nearSeriesList.length === 0) {
+        container.innerHTML = `<p class="text-xs text-slate-500 italic text-center py-6">ไม่มีซีรีส์สะสมที่ค้างคาอยู่</p>`;
+        return;
+      }
+
+      nearSeriesList.forEach(s => {
+        container.innerHTML += `
+          <div class="space-y-1.5">
+            <div class="flex justify-between text-[11px] font-semibold text-slate-300">
+              <span class="truncate max-w-[130px]">${s.name}</span>
+              <span class="text-indigo-400">${s.owned}/${s.total} เล่ม (${s.percent}%)</span>
+            </div>
+            <div class="w-full bg-slate-950 h-1.5 rounded-full overflow-hidden">
+              <div class="bg-gradient-to-r from-violet-500 to-indigo-500 h-full rounded-full" style="width: ${s.percent}%"></div>
+            </div>
+          </div>
+        `;
+      });
+    }
+
+    // --- DETAIL VIEW: ROI ANALYTICS ---
+    function renderRoiInsights() {
+      const container = document.getElementById('roi-analysis-list');
+      container.innerHTML = '';
+
+      if (books.length === 0) {
+        container.innerHTML = `<p class="col-span-2 text-xs text-slate-500 italic text-center py-6">รออัปโหลดข้อมูลหนังสือเพื่อวิเคราะห์ความคุ้มค่า</p>`;
+        return;
+      }
+
+      books.forEach(b => {
+        const cost = Number(b.cost) || 0;
+        const hours = Number(b.readingTime) || 0;
+        const rating = Number(b.rating) || 0;
+
+        const costPerHour = hours > 0 ? (cost / hours).toFixed(1) : 'N/A';
+        const costPerRating = rating > 0 ? (cost / rating).toFixed(1) : 'N/A';
+
+        let adviceText = '';
+        let colorTheme = 'text-slate-400';
+        if (b.status === 'อ่านจบ') {
+          if (rating >= 4 && hours > 0 && (cost / hours) < 40) {
+            adviceText = '💎 เล่มนี้โคตรคุ้มค่า! ค่าใช้จ่ายต่อชั่วโมงถูกมากแถมความพึงพอใจดีเยี่ยม';
+            colorTheme = 'text-emerald-400 font-bold';
+          } else if (rating <= 2.5 && cost > 250) {
+            adviceText = '💸 จ่ายแพงแต่เสียเวลาเปล่า! เล่มนี้ราคาค่อนข้างสูงแต่คะแนนความสนุกต่ำ';
+            colorTheme = 'text-rose-400';
+          } else {
+            adviceText = '👍 ความพึงพอใจคุ้มราคาตามเกณฑ์มาตรฐานทั่วไป';
+            colorTheme = 'text-slate-300';
+          }
+        } else {
+          adviceText = '🧊 ดองคาตู้! ยังไม่ได้เปิดอ่านเพื่อรับสารอาหารทางปัญญา';
+          colorTheme = 'text-amber-500';
+        }
+
+        container.innerHTML += `
+          <div class="p-3 bg-slate-950/60 border border-slate-800/80 rounded-xl flex justify-between items-center gap-4 text-xs">
+            <div class="space-y-1 truncate flex-1">
+              <p class="font-bold text-slate-200 truncate">${b.title}</p>
+              <p class="text-[10px] text-slate-500">ประเภท: ${b.genre}</p>
+              <p class="text-[10px] ${colorTheme}">${adviceText}</p>
+            </div>
+            <div class="text-right space-y-0.5 shrink-0 font-mono text-[11px]">
+              <p class="text-slate-300">฿${costPerHour}/ชม.</p>
+              <p class="text-slate-400">ดาว: ${rating > 0 ? `${rating}/5` : 'N/A'}</p>
+            </div>
+          </div>
+        `;
+      });
+    }
+
+    // --- DETAIL VIEW: MASTER BOOKS TABLE ---
+    function renderBookTable() {
+      const tbody = document.getElementById('books-table-body');
+      tbody.innerHTML = '';
+
+      const query = document.getElementById('search-input').value.toLowerCase();
+      const genreSel = document.getElementById('filter-genre').value;
+      const pubSel = document.getElementById('filter-publisher').value;
+
+      const filtered = books.filter(b => {
+        // Search text matching
+        const matchQuery = b.title.toLowerCase().includes(query) || 
+                           (b.author && b.author.toLowerCase().includes(query)) || 
+                           (b.note && b.note.toLowerCase().includes(query));
+        if (!matchQuery) return false;
+
+        // Genre select matching
+        if (genreSel !== 'all' && b.genre !== genreSel) return false;
+
+        // Publisher select matching
+        if (pubSel !== 'all' && b.publisherId !== pubSel) return false;
+
+        // Smart Filter button matching
+        if (activeSmartFilter === 'favorite') {
+          return b.isFavorite && b.status === 'ดอง';
+        } else if (activeSmartFilter === 'uncompleted') {
+          return b.status === 'ดอง' && (Number(b.volumeOwned) < Number(b.volumeTotal));
+        } else if (activeSmartFilter === 'year-2026') {
+          const date = b.startDate || b.endDate;
+          return date && date.startsWith('2026');
+        }
+
+        return true;
+      });
+
+      if (filtered.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="8" class="p-8 text-center text-slate-500 italic">ไม่พบบันทึกหนังสือที่สอดคล้องกับตัวกรองขณะนี้</td>
+          </tr>
+        `;
+        return;
+      }
+
+      filtered.forEach(b => {
+        const pub = publishers.find(p => p.id === b.publisherId) || { name: 'ไม่ระบุ', color: '#9CA3AF' };
+        const isNotComplete = Number(b.volumeOwned) < Number(b.volumeTotal);
+
+        tbody.innerHTML += `
+          <tr class="hover:bg-slate-800/40 transition-colors">
+            <td class="p-4">
+              <div class="flex items-center gap-2">
+                <button onclick="toggleFavoriteBook('${b.id}')" class="text-amber-400 focus:outline-none">
+                  <i class="${b.isFavorite ? 'fa-solid' : 'fa-regular'} fa-star"></i>
+                </button>
+                <span onclick="openEditDetailsModal('${b.id}')" class="font-bold text-slate-200 cursor-pointer hover:underline">${b.title}</span>
               </div>
-
-              <div className="space-y-1">
-                <label className="text-slate-400 font-semibold block">🧠 บทเรียน / ตกผลึกความคิด (Memory & Insights):</label>
-                <textarea
-                  value={selectedBookForDetails.insight || ''}
-                  placeholder="บันทึกหัวข้อสำคัญ หรือการนำไปใช้ประโยชน์..."
-                  onChange={(e) => {
-                    const text = e.target.value;
-                    setBooks(prev => prev.map(b => b.id === selectedBookForDetails.id ? { ...b, insight: text } : b));
-                    setSelectedBookForDetails(prev => ({ ...prev, insight: text }));
-                  }}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-200 focus:outline-none focus:border-violet-500 h-24"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3 text-[11px] pt-2 border-t border-slate-800 text-slate-400">
-                <div>
-                  <span className="block font-bold text-slate-300">วันที่เริ่มต้นอ่าน:</span>
-                  <input
-                    type="date"
-                    value={selectedBookForDetails.startDate || ''}
-                    onChange={(e) => {
-                      const d = e.target.value;
-                      setBooks(prev => prev.map(b => b.id === selectedBookForDetails.id ? { ...b, startDate: d } : b));
-                      setSelectedBookForDetails(prev => ({ ...prev, startDate: d }));
-                    }}
-                    className="bg-slate-950 border border-slate-800 rounded-lg p-1.5 mt-1 text-[11px] text-slate-200 focus:outline-none"
-                  />
-                </div>
-                <div>
-                  <span className="block font-bold text-slate-300">วันที่อ่านจบ:</span>
-                  <input
-                    type="date"
-                    value={selectedBookForDetails.endDate || ''}
-                    onChange={(e) => {
-                      const d = e.target.value;
-                      setBooks(prev => prev.map(b => b.id === selectedBookForDetails.id ? { ...b, endDate: d } : b));
-                      setSelectedBookForDetails(prev => ({ ...prev, endDate: d }));
-                    }}
-                    className="bg-slate-950 border border-slate-800 rounded-lg p-1.5 mt-1 text-[11px] text-slate-200 focus:outline-none"
-                  />
-                </div>
-              </div>
-
-              <div className="pt-3">
-                <button
-                  onClick={() => setSelectedBookForDetails(null)}
-                  className="w-full bg-violet-600 hover:bg-violet-700 text-white font-bold py-2.5 rounded-xl transition-all"
-                >
-                  ตกลงและบันทึกประเด็น
+              ${b.note ? `<p class="text-[10px] text-slate-500 ml-6 mt-0.5 max-w-[180px] truncate">📝 ${b.note}</p>` : ''}
+            </td>
+            <td class="p-4 text-slate-300">${b.author || '-'}</td>
+            <td class="p-4">
+              <span class="px-2 py-0.5 rounded text-[10px] font-bold" style="background-color: ${pub.color}20; color: ${pub.color}">
+                ${pub.name}
+              </span>
+            </td>
+            <td class="p-4 text-center text-slate-300">
+              ${b.volumeOwned} / ${b.volumeTotal} เล่ม
+              ${isNotComplete ? `<span class="block text-[9px] text-rose-400 font-extrabold uppercase mt-0.5">⚠️ ยังไม่ครบชุด</span>` : ''}
+            </td>
+            <td class="p-4 text-slate-400">${b.genre}</td>
+            <td class="p-4">
+              <select
+                onchange="updateBookStatus('${b.id}', this.value)"
+                class="px-2 py-1 rounded text-[10px] font-bold bg-slate-950 border border-slate-800 ${
+                  b.status === 'อ่านจบ' ? 'text-emerald-400' :
+                  b.status === 'กำลังอ่าน' ? 'text-indigo-400' :
+                  b.status === 'ดอง' ? 'text-amber-400' : 'text-slate-400'
+                }"
+              >
+                <option value="Wishlist" ${b.status === 'Wishlist' ? 'selected' : ''}>Wishlist</option>
+                <option value="ดอง" ${b.status === 'ดอง' ? 'selected' : ''}>ดอง</option>
+                <option value="กำลังอ่าน" ${b.status === 'กำลังอ่าน' ? 'selected' : ''}>กำลังอ่าน</option>
+                <option value="อ่านจบ" ${b.status === 'อ่านจบ' ? 'selected' : ''}>อ่านจบ</option>
+                <option value="ขายแล้ว" ${b.status === 'ขายแล้ว' ? 'selected' : ''}>ขายแล้ว/ส่งออก</option>
+              </select>
+            </td>
+            <td class="p-4 text-right font-mono text-slate-200">฿${b.cost}</td>
+            <td class="p-4">
+              <div class="flex justify-center gap-1.5">
+                <button onclick="openEditDetailsModal('${b.id}')" class="p-1.5 bg-slate-800 hover:bg-slate-700 rounded text-slate-300 text-[10px]" title="บันทึกย่อ / สรุปประเด็น">
+                  <i class="fa-solid fa-pen-to-square"></i> บันทึก
+                </button>
+                <button onclick="deleteBookTally('${b.id}')" class="p-1.5 bg-rose-600/10 hover:bg-rose-600/20 text-rose-400 rounded text-[10px]" title="คัดออกจากชั้น">
+                  <i class="fa-solid fa-trash"></i>
                 </button>
               </div>
+            </td>
+          </tr>
+        `;
+      });
+    }
+
+    function toggleFavoriteBook(bookId) {
+      books = books.map(b => b.id === bookId ? { ...b, isFavorite: !b.isFavorite } : b);
+      saveToStorage();
+      renderAppViews();
+    }
+
+    function updateBookStatus(bookId, newStatus) {
+      books = books.map(b => b.id === bookId ? { ...b, status: newStatus } : b);
+      saveToStorage();
+      renderAppViews();
+    }
+
+    function deleteBookTally(bookId) {
+      if (confirm('คุณแน่ใจว่าต้องการลบข้อมูลหนังสือชิ้นนี้ออกจากชั้นวางหนังสือใช่หรือไม่?')) {
+        books = books.filter(b => b.id !== bookId);
+        // Clear references inside series too
+        series = series.map(s => ({
+          ...s,
+          bookIds: s.bookIds.filter(id => id !== bookId)
+        }));
+        saveToStorage();
+        renderAppViews();
+      }
+    }
+
+    // --- DETAIL VIEW: SERIES TRACKER ---
+    function renderSeriesGrid() {
+      const container = document.getElementById('series-grid-container');
+      container.innerHTML = '';
+
+      if (series.length === 0) {
+        container.innerHTML = `
+          <div class="col-span-2 bg-slate-900 border border-slate-800 p-8 rounded-2xl text-center text-slate-500 italic">
+            ยังไม่มีข้อมูลชุดซีรีส์ในระบบขณะนี้ ลองสร้างเพื่อติดตามเล่มครบชุดดูสิครับ
+          </div>
+        `;
+        return;
+      }
+
+      series.forEach(s => {
+        const associated = books.filter(b => s.bookIds.includes(b.id));
+        const owned = associated.reduce((sum, b) => sum + (Number(b.volumeOwned) || 0), 0);
+        const total = associated.reduce((sum, b) => sum + (Number(b.volumeTotal) || 0), 0);
+        const percent = total > 0 ? Math.round((owned / total) * 100) : 0;
+
+        container.innerHTML += `
+          <div class="bg-slate-900 border border-slate-800 p-5 rounded-2xl space-y-3 shadow-lg">
+            <div class="flex justify-between items-center">
+              <h4 class="font-bold text-slate-200">${s.name}</h4>
+              <span class="px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase ${
+                percent === 100 ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+              }">
+                ${percent === 100 ? 'ครบชุดสมบูรณ์ 🎉' : `ยังขาดอีก ${total - owned} เล่ม`}
+              </span>
+            </div>
+
+            <div class="w-full bg-slate-950 h-3 rounded-full overflow-hidden">
+              <div class="bg-gradient-to-r from-violet-500 to-indigo-500 h-full rounded-full transition-all duration-500" style="width: ${percent}%"></div>
+            </div>
+
+            <div class="flex justify-between text-xs text-slate-400 font-medium">
+              <span>เล่มสะสมทั้งหมด: ${owned} / ${total} เล่ม</span>
+              <span>ความคืบหน้า: ${percent}%</span>
+            </div>
+
+            <div class="space-y-1.5 pt-2 border-t border-slate-800">
+              <p class="text-[9px] text-slate-500 uppercase tracking-widest font-black">เล่มที่ผูกในซีรีส์นี้:</p>
+              ${associated.map(b => `
+                <div class="flex justify-between text-[11px] p-2 bg-slate-950/60 rounded border border-slate-800/80">
+                  <span class="text-slate-300 font-semibold">${b.title}</span>
+                  <span class="text-slate-500">สะสมแล้ว ${b.volumeOwned} เล่ม</span>
+                </div>
+              `).join('')}
+              ${associated.length === 0 ? `<p class="text-[11px] text-slate-600 italic">ไม่มีข้อมูลเล่มหนังสือร่วมสมาคม (ลองเพิ่มเล่มให้ชื่อเรื่องมีส่วนร่วมกับชื่อชุด)</p>` : ''}
             </div>
           </div>
-        </div>
-      )}
+        `;
+      });
+    }
 
-    </div>
-  );
-}
+    // --- DETAIL VIEW: GOALS TRACKER ---
+    function renderGoalsGrid() {
+      const container = document.getElementById('goals-grid-container');
+      container.innerHTML = '';
+
+      if (goals.length === 0) {
+        container.innerHTML = `
+          <div class="col-span-2 bg-slate-900 border border-slate-800 p-8 rounded-2xl text-center text-slate-500 italic">
+            ไม่มีการกำหนดเป้าหมายความฝันการอ่านขณะนี้
+          </div>
+        `;
+        return;
+      }
+
+      goals.forEach(g => {
+        // Filter books read within the specified month/year
+        const completed = books.filter(b => {
+          if (b.status !== 'อ่านจบ') return false;
+          if (!b.endDate) return false;
+
+          const end = new Date(b.endDate);
+          const finishYear = end.getFullYear();
+          const finishMonth = end.getMonth() + 1;
+
+          if (g.month > 0) {
+            return finishYear === Number(g.year) && finishMonth === Number(g.month);
+          }
+          return finishYear === Number(g.year);
+        });
+
+        const progressPercent = Math.min(Math.round((completed.length / g.targetBooks) * 100), 100);
+
+        container.innerHTML += `
+          <div class="bg-slate-900 border border-slate-800 p-5 rounded-2xl space-y-3 shadow-lg relative overflow-hidden">
+            <div class="flex justify-between items-start">
+              <div>
+                <h4 class="font-bold text-slate-200">${g.label}</h4>
+                <p class="text-[10px] text-slate-500 uppercase tracking-wider mt-0.5">
+                  ขอบเขตเวลา: ${g.month > 0 ? `เดือน ${g.month}/` : ''}ปี ${g.year}
+                </p>
+              </div>
+              <span class="text-2xl">🎯</span>
+            </div>
+
+            <div class="pt-2">
+              <div class="flex justify-between text-xs text-slate-300 font-bold mb-1">
+                <span>สถิติจำนวนเล่มอ่านจบแล้ว</span>
+                <span class="text-violet-400">${completed.length} / ${g.targetBooks} เล่ม (${progressPercent}%)</span>
+              </div>
+              <div class="w-full bg-slate-950 h-2.5 rounded-full overflow-hidden">
+                <div class="bg-gradient-to-r from-emerald-400 to-indigo-500 h-full rounded-full transition-all duration-500" style="width: ${progressPercent}%"></div>
+              </div>
+            </div>
+
+            ${progressPercent === 100 ? `
+              <div class="p-2.5 bg-emerald-500/10 rounded-xl border border-emerald-500/20 text-[10px] text-emerald-400 font-bold text-center">
+                🏆 พิชิตภารกิจความฝันสำเร็จเรียบร้อยแล้วสุดยอด!
+              </div>
+            ` : ''}
+          </div>
+        `;
+      });
+    }
+
+    // --- DETAIL VIEW: GAMIFIED PASSPORT CARD (LV 5 & 10) ---
+    function renderPassportCard() {
+      const container = document.getElementById('interactive-passport-card-box');
+      container.innerHTML = '';
+
+      // Redetect Level based on calculated XP
+      const readCount = books.filter(b => b.status === 'อ่านจบ').length;
+      const hoardCount = books.filter(b => b.status === 'ดอง').length;
+      const totalCost = books.reduce((acc, b) => acc + (Number(b.cost) || 0), 0);
+      const hoursLogged = Object.values(readingLogs).reduce((acc, l) => acc + (l.hours || 0), 0);
+      const calculatedXP = (readCount * 15) + (hoursLogged * 3);
+      const level = Math.floor(calculatedXP / 50) + 1;
+
+      if (level >= 10) {
+        // LEVEL 10+: DIVIDED IMAGE LEFT & RIGHT HALF CARD
+        container.innerHTML = `
+          <div class="w-full max-w-lg bg-slate-900 border-2 border-amber-500 rounded-3xl overflow-hidden shadow-2xl flex flex-col sm:flex-row min-h-[300px] transition-all transform hover:scale-[1.01]">
+            <div class="w-full sm:w-1/2 h-52 sm:h-auto bg-cover bg-center relative" style="background-image: url('${userProfile.photoLeft}')">
+              <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-transparent"></div>
+              <div class="absolute bottom-4 left-4">
+                <span class="bg-amber-500 text-slate-950 text-[9px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider">
+                  TITAN READER
+                </span>
+              </div>
+            </div>
+            <div class="w-full sm:w-1/2 h-52 sm:h-auto bg-cover bg-center relative" style="background-image: url('${userProfile.photoRight}')">
+              <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-transparent"></div>
+              <div class="absolute bottom-4 left-4 right-4 z-10 text-left">
+                <p class="text-[9px] text-amber-400 font-extrabold uppercase tracking-widest">LEGENDARY CHAMPION</p>
+                <h4 class="text-lg font-extrabold text-white">${userProfile.name}</h4>
+                <p class="text-[10px] text-slate-300 italic mt-1 leading-snug">${userProfile.bio}</p>
+                
+                <div class="mt-3 bg-slate-900/95 p-2.5 rounded-xl border border-slate-800/80 flex justify-between text-[10px] font-mono">
+                  <div>
+                    <p class="text-slate-500">อ่านจบ</p>
+                    <p class="font-extrabold text-emerald-400">${readCount} เล่ม</p>
+                  </div>
+                  <div>
+                    <p class="text-slate-500">ดองคลัง</p>
+                    <p class="font-extrabold text-amber-400">${hoardCount} เล่ม</p>
+                  </div>
+                  <div>
+                    <p class="text-slate-500">ระดับพลัง</p>
+                    <p class="font-extrabold text-violet-400">LV.${level}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+      } else if (level >= 5) {
+        // LEVEL 5 - 9: FULL IMAGE BACKGROUND CARD
+        container.innerHTML = `
+          <div class="w-full max-w-sm h-[360px] rounded-3xl bg-cover bg-center relative overflow-hidden shadow-2xl border border-slate-700/60 transition-all transform hover:scale-[1.01]" style="background-image: url('${userProfile.photoLeft}')">
+            <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-transparent"></div>
+            <div class="absolute top-4 right-4 bg-gradient-to-r from-violet-600 to-indigo-600 text-white text-[9px] font-black px-3 py-1 rounded-full shadow-md uppercase tracking-widest border border-violet-400/30">
+              LV.${level} RANGER
+            </div>
+
+            <div class="absolute bottom-0 inset-x-0 p-5 space-y-3">
+              <div>
+                <h4 class="text-xl font-extrabold text-white tracking-wide">${userProfile.name}</h4>
+                <p class="text-xs text-slate-200 italic leading-snug mt-1">${userProfile.bio}</p>
+              </div>
+
+              <div class="bg-slate-950/90 p-3 rounded-2xl border border-slate-800 flex justify-between text-xs font-mono">
+                <div>
+                  <p class="text-slate-500 text-[9px]">READ</p>
+                  <p class="font-extrabold text-emerald-400">${readCount} เล่ม</p>
+                </div>
+                <div>
+                  <p class="text-slate-500 text-[9px]">HOARD</p>
+                  <p class="font-extrabold text-amber-400">${hoardCount} เล่ม</p>
+                </div>
+                <div>
+                  <p class="text-slate-500 text-[9px]">EXPENSES</p>
+                  <p class="font-extrabold text-blue-400">฿${totalCost}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+      } else {
+        // LEVEL 1 - 4: BASIC STANDARD CARD
+        container.innerHTML = `
+          <div class="w-full max-w-xs bg-slate-900 border border-slate-800 p-6 rounded-3xl text-center space-y-4 shadow-xl relative overflow-hidden">
+            <div class="absolute top-0 right-0 w-20 h-20 bg-violet-600/10 rounded-full blur-2xl"></div>
+            <div class="w-16 h-16 bg-slate-800 rounded-full mx-auto flex items-center justify-center font-bold text-2xl border border-slate-700 shadow-inner">
+              📖
+            </div>
+            <div>
+              <h4 class="text-base font-bold text-slate-200">${userProfile.name}</h4>
+              <p class="text-xs text-slate-400 italic mt-1 leading-snug">${userProfile.bio}</p>
+            </div>
+
+            <div class="grid grid-cols-3 gap-2 py-2.5 border-y border-slate-800/80 text-xs font-semibold">
+              <div>
+                <p class="text-slate-500 text-[10px]">อ่านสำเร็จ</p>
+                <p class="font-bold text-emerald-400">${readCount} เล่ม</p>
+              </div>
+              <div>
+                <p class="text-slate-500 text-[10px]">ดองคลัง</p>
+                <p class="font-bold text-amber-400">${hoardCount} เล่ม</p>
+              </div>
+              <div>
+                <p class="text-slate-500 text-[10px]">เลเวล</p>
+                <p class="font-bold text-violet-400">LV.${level}</p>
+              </div>
+            </div>
+
+            <div class="text-[9px] text-slate-500 uppercase tracking-wider font-extrabold italic">
+              สะสมประวัติการอ่านสำเร็จเพื่ออัปเกรดบัตรรูปภาพพิเศษ!
+            </div>
+          </div>
+        `;
+      }
+    }
+
+    function updateProfileFromSettings() {
+      userProfile.name = document.getElementById('profile-input-name').value;
+      userProfile.bio = document.getElementById('profile-input-bio').value;
+      userProfile.photoLeft = document.getElementById('profile-input-photo-left').value;
+      userProfile.photoRight = document.getElementById('profile-input-photo-right').value;
+
+      saveToStorage();
+      recomputeAllStats();
+    }
+
+
+    // === FORM HANDLERS / CREATION SUITE ===
+    function handleFormAddBook(e) {
+      e.preventDefault();
+
+      const title = document.getElementById('form-title').value;
+      const author = document.getElementById('form-author').value;
+      const genre = document.getElementById('form-genre').value;
+      const publisherId = document.getElementById('form-publisher').value;
+      const status = document.getElementById('form-status').value;
+      const volumeOwned = Number(document.getElementById('form-owned').value) || 1;
+      const volumeTotal = Number(document.getElementById('form-total-vols').value) || 1;
+      const cost = Number(document.getElementById('form-cost').value) || 0;
+      const rating = Number(document.getElementById('form-rating').value) || 0;
+      const readingTime = Number(document.getElementById('form-reading-time').value) || 0;
+      const note = document.getElementById('form-note').value;
+      const isFavorite = document.getElementById('form-is-favorite').checked;
+
+      // Smart decision prevent action if system lock
+      const hoardCount = books.filter(b => b.status === 'ดอง').length;
+      if (hoardCount > 10 && status === 'ดอง') {
+        alert('❌ ระบบระงับการเพิ่มหนังสือดองใหม่ชั่วคราว! กรุณาอ่านเล่มดองเดิมให้จบก่อนเพื่อรักษาวินัยการอ่านนะครับ');
+        return;
+      }
+
+      const bookId = 'book-' + Date.now();
+      const newBookObj = {
+        id: bookId,
+        title,
+        author,
+        genre,
+        publisherId,
+        status,
+        volumeOwned,
+        volumeTotal,
+        cost,
+        rating,
+        readingTime,
+        note,
+        isFavorite,
+        startDate: status === 'กำลังอ่าน' || status === 'อ่านจบ' ? new Date().toISOString().split('T')[0] : '',
+        endDate: status === 'อ่านจบ' ? new Date().toISOString().split('T')[0] : '',
+        quote: '',
+        insight: ''
+      };
+
+      books.push(newBookObj);
+
+      // Auto check if title is parts of known series, link them together
+      const cleanSeriesQuery = title.replace(/\s*เล่ม\s*\d+/g, '').trim();
+      const matchedSeries = series.find(s => s.name.trim() === cleanSeriesQuery);
+      if (matchedSeries) {
+        matchedSeries.bookIds.push(bookId);
+      } else if (volumeTotal > 1) {
+        // Auto create series
+        series.push({
+          id: 'ser-' + Date.now(),
+          name: cleanSeriesQuery,
+          bookIds: [bookId]
+        });
+      }
+
+      saveToStorage();
+      closeModal('add-book-modal');
+      
+      // Reset form
+      e.target.reset();
+
+      renderAppViews();
+    }
+
+    function handleFormAddPub(e) {
+      e.preventDefault();
+      const name = document.getElementById('form-pub-name').value;
+      const color = document.getElementById('form-pub-color').value;
+
+      publishers.push({
+        id: 'pub-' + Date.now(),
+        name,
+        color
+      });
+
+      saveToStorage();
+      closeModal('add-pub-modal');
+      e.target.reset();
+      renderAppViews();
+    }
+
+    function handleFormAddSeries(e) {
+      e.preventDefault();
+      const name = document.getElementById('form-series-name').value;
+
+      series.push({
+        id: 'ser-' + Date.now(),
+        name,
+        bookIds: []
+      });
+
+      saveToStorage();
+      closeModal('add-series-modal');
+      e.target.reset();
+      renderAppViews();
+    }
+
+    function handleFormAddGoal(e) {
+      e.preventDefault();
+      const label = document.getElementById('form-goal-label').value;
+      const year = Number(document.getElementById('form-goal-year').value) || 2026;
+      const month = Number(document.getElementById('form-goal-month').value) || 0;
+      const targetBooks = Number(document.getElementById('form-goal-target').value) || 5;
+
+      goals.push({
+        id: 'goal-' + Date.now(),
+        label,
+        year,
+        month,
+        targetBooks
+      });
+
+      saveToStorage();
+      closeModal('add-goal-modal');
+      e.target.reset();
+      renderAppViews();
+    }
+
+    // --- LOG MEMORY INSIGHTS ---
+    function openEditDetailsModal(bookId) {
+      const book = books.find(b => b.id === bookId);
+      if (!book) return;
+
+      document.getElementById('detail-book-id').value = book.id;
+      document.getElementById('detail-book-subtitle').innerText = `ชื่อหนังสือ: ${book.title}`;
+      document.getElementById('detail-book-quote').value = book.quote || '';
+      document.getElementById('detail-book-insight').value = book.insight || '';
+      document.getElementById('detail-book-start-date').value = book.startDate || '';
+      document.getElementById('detail-book-end-date').value = book.endDate || '';
+
+      openModal('detail-book-modal');
+    }
+
+    function saveBookDetailsMemo() {
+      const id = document.getElementById('detail-book-id').value;
+      const quote = document.getElementById('detail-book-quote').value;
+      const insight = document.getElementById('detail-book-insight').value;
+      const start = document.getElementById('detail-book-start-date').value;
+      const end = document.getElementById('detail-book-end-date').value;
+
+      books = books.map(b => b.id === id ? {
+        ...b,
+        quote,
+        insight,
+        startDate: start,
+        endDate: end
+      } : b);
+
+      saveToStorage();
+      closeModal('detail-book-modal');
+      renderAppViews();
+    }
+
+
+    // === TAB 5: STUDY POMODORO TIMER ENGINE ===
+    function toggleFocusTimer() {
+      const btn = document.getElementById('focus-start-btn');
+      if (isTimerRunning) {
+        // Stop timer
+        clearInterval(timerInterval);
+        isTimerRunning = false;
+        btn.innerText = 'เริ่มจดจ่อใหม่';
+        document.getElementById('focus-clock-label').innerText = 'Paused';
+      } else {
+        // Start timer
+        isTimerRunning = true;
+        btn.innerText = 'หยุดเวลาชั่วคราว';
+        document.getElementById('focus-clock-label').innerText = 'Reading Deeply';
+
+        timerInterval = setInterval(() => {
+          if (timerSecondsLeft > 0) {
+            timerSecondsLeft--;
+            updateFocusClockDisplay();
+          } else {
+            // Completed pomodoro round
+            clearInterval(timerInterval);
+            isTimerRunning = false;
+            alert('🎉 ยินดีด้วยคุณครบรอบ 25 นาทีแห่งความเงียบสงบและการอ่านสะสมชั่วโมงปัญญา!');
+            btn.innerText = 'เริ่มจดจ่อใหม่';
+            
+            // Add automatic 0.5 hours log for today
+            const todayStr = new Date().toISOString().split('T')[0];
+            if (!readingLogs[todayStr]) {
+              readingLogs[todayStr] = { pages: 0, hours: 0 };
+            }
+            readingLogs[todayStr].hours += 0.5;
+
+            // Increment current focus session reading time of books currently reading
+            const currentReadingBook = books.find(b => b.status === 'กำลังอ่าน');
+            if (currentReadingBook) {
+              currentReadingBook.readingTime = (Number(currentReadingBook.readingTime) || 0) + 0.5;
+            }
+
+            saveToStorage();
+            resetFocusTimer();
+            renderAppViews();
+          }
+        }, 1000);
+      }
+    }
+
+    function resetFocusTimer() {
+      clearInterval(timerInterval);
+      isTimerRunning = false;
+      timerSecondsLeft = 25 * 60;
+      updateFocusClockDisplay();
+      document.getElementById('focus-start-btn').innerText = 'เริ่มจดจ่อ';
+      document.getElementById('focus-clock-label').innerText = 'Ready';
+    }
+
+    function updateFocusClockDisplay() {
+      const minutes = Math.floor(timerSecondsLeft / 60);
+      const seconds = timerSecondsLeft % 60;
+      document.getElementById('focus-clock-time').innerText = 
+        `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+    }
+
+    function saveQuickProgress() {
+      const pInput = document.getElementById('focus-quick-pages');
+      const pages = Number(pInput.value) || 0;
+      if (pages <= 0) {
+        alert('กรุณากรอกจำนวนหน้าการอ่านที่มากกว่า 0 ครับ');
+        return;
+      }
+
+      const todayStr = new Date().toISOString().split('T')[0];
+      if (!readingLogs[todayStr]) {
+        readingLogs[todayStr] = { pages: 0, hours: 0 };
+      }
+      readingLogs[todayStr].pages += pages;
+
+      alert(`บันทึกการอ่านเสร็จสิ้น วันนี้คุณเก็บระยะการสะสมได้ ${pages} หน้า!`);
+      pInput.value = '';
+
+      saveToStorage();
+      renderAppViews();
+    }
+  </script>
+</body>
+</html>
 
 ```
